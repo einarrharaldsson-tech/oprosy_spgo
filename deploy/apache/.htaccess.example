@@ -1,0 +1,29 @@
+# Дополнительная HTTP Basic Auth перед входом в приложение.
+#
+# 1. Скопируйте в каталог, который отдаёт Apache (DocumentRoot или proxy vhost):
+#    cp deploy/apache/.htaccess.example /var/www/oprosy/public/.htaccess
+# 2. Создайте файл паролей (путь — абсолютный!):
+#    htpasswd -c /var/www/oprosy/.htpasswd gate_user
+# 3. Укажите AuthUserFile ниже тем же абсолютным путём.
+# 4. Включите модули Apache: auth_basic, authn_file, proxy, proxy_http, rewrite
+#
+# Важно: .htpasswd не коммитьте в git.
+
+AuthType Basic
+AuthName "Oprosy — доступ по паролю"
+AuthUserFile /var/www/oprosy/.htpasswd
+Require valid-user
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Проксирование на Node.js (production, npm start на порту 3000)
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]
+
+  # Если Apache 2.4+ и нужен явный заголовок для приложения за прокси:
+  # RequestHeader set X-Forwarded-Proto "https"
+  # RequestHeader set X-Forwarded-For %{REMOTE_ADDR}s
+</IfModule>
+
+# Альтернатива без mod_rewrite — только ProxyPass в VirtualHost (см. README).

@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+client/dist/
+server/uploads/
+.vscode/
+.idea/
+.htpasswd
+**/.htpasswd
+deploy/apache/.htaccess
+
+# Sample questionnaire Word files in project root (local testing)
+/*.docx
+/_*.docx

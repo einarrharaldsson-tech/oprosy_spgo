@@ -1,0 +1,32 @@
+# Пример VirtualHost Apache 2.4 + Basic Auth + reverse proxy на Node.js
+# Файл: /etc/apache2/sites-available/oprosy.conf
+#
+# sudo a2enmod proxy proxy_http headers auth_basic authn_file ssl rewrite
+# sudo a2ensite oprosy && sudo systemctl reload apache2
+
+<VirtualHost *:443>
+    ServerName oprosy.example.com
+
+    SSLEngine on
+    SSLCertificateFile    /etc/letsencrypt/live/oprosy.example.com/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/oprosy.example.com/privkey.pem
+
+    # HTTP Basic Auth (первый «замок»)
+    <Location />
+        AuthType Basic
+        AuthName "Oprosy — доступ по паролю"
+        AuthUserFile /var/www/oprosy/.htpasswd
+        Require valid-user
+    </Location>
+
+    # Прокси на приложение (второй «замок» — логин admin внутри приложения)
+    ProxyPreserveHost On
+    ProxyPass / http://127.0.0.1:3000/
+    ProxyPassReverse / http://127.0.0.1:3000/
+
+    RequestHeader set X-Forwarded-Proto "https"
+    RequestHeader set X-Forwarded-For "%{REMOTE_ADDR}s"
+
+    ErrorLog ${APACHE_LOG_DIR}/oprosy-error.log
+    CustomLog ${APACHE_LOG_DIR}/oprosy-access.log combined
+</VirtualHost>

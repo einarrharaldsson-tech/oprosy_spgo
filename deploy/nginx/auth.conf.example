@@ -1,0 +1,16 @@
+# Фрагмент для nginx: Basic Auth перед приложением (аналог .htaccess)
+# Подключите в server { } перед location / { proxy_pass ... } }
+#
+# 1. sudo apt install apache2-utils
+# 2. sudo htpasswd -c /etc/nginx/.htpasswd gate_user
+# 3. sudo chmod 640 /etc/nginx/.htpasswd && sudo chown root:www-data /etc/nginx/.htpasswd
+
+auth_basic "Oprosy — доступ по паролю";
+auth_basic_user_file /etc/nginx/.htpasswd;
+
+# Далее в том же location /:
+# proxy_pass http://127.0.0.1:3000;
+# proxy_set_header Host $host;
+# proxy_set_header X-Real-IP $remote_addr;
+# proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+# proxy_set_header X-Forwarded-Proto $scheme;
