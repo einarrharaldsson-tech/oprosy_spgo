@@ -45,7 +45,7 @@ export function useVoiceRecorder() {
 
   useEffect(() => () => cleanupStream(), [cleanupStream]);
 
-  const start = useCallback(async () => {
+  const start = useCallback(async ({ onChunk } = {}) => {
     setError('');
     cleanupStream();
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -68,7 +68,14 @@ export function useVoiceRecorder() {
         : new MediaRecorder(stream);
       chunksRef.current = [];
       recorder.ondataavailable = (e) => {
-        if (e.data?.size) chunksRef.current.push(e.data);
+        if (e.data?.size) {
+          chunksRef.current.push(e.data);
+          if (typeof onChunk === 'function') {
+            Promise.resolve(onChunk(e.data)).catch((err) => {
+              console.error('voice chunk persistence failed', err);
+            });
+          }
+        }
       };
       recorderRef.current = recorder;
       recorder.start(1000);

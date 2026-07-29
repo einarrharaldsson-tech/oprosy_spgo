@@ -100,3 +100,52 @@ export async function submitSurveyResponse(surveyId, { payload, audioBlob, audio
   }
   return api(`/surveys/${surveyId}/responses`, { method: 'POST', body: form });
 }
+
+export async function createResponseUploadSession(
+  surveyId,
+  { clientSessionId, audioMime, audioDurationSec }
+) {
+  return api(`/surveys/${surveyId}/responses/session`, {
+    method: 'POST',
+    body: {
+      clientSessionId,
+      audioMime: audioMime || null,
+      audioDurationSec: audioDurationSec || 0,
+    },
+  });
+}
+
+export async function getResponseUploadSessionStatus(surveyId, uploadSessionId) {
+  return api(`/surveys/${surveyId}/responses/session/${uploadSessionId}/status`);
+}
+
+export async function uploadResponseAudioChunk(
+  surveyId,
+  uploadSessionId,
+  { chunkIndex, chunkBlob, audioDurationSec }
+) {
+  const form = new FormData();
+  form.append('chunkIndex', String(chunkIndex));
+  form.append('audioDurationSec', String(audioDurationSec || 0));
+  const ext = chunkBlob.type?.includes('mp4') ? 'm4a' : 'webm';
+  form.append('chunk', chunkBlob, `chunk-${chunkIndex}.${ext}`);
+  return api(`/surveys/${surveyId}/responses/session/${uploadSessionId}/chunks`, {
+    method: 'POST',
+    body: form,
+  });
+}
+
+export async function finalizeResponseUploadSession(
+  surveyId,
+  uploadSessionId,
+  { payload, totalChunks, hasAudio }
+) {
+  return api(`/surveys/${surveyId}/responses/session/${uploadSessionId}/finalize`, {
+    method: 'POST',
+    body: {
+      payload,
+      totalChunks,
+      hasAudio,
+    },
+  });
+}

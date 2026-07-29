@@ -1,9 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { submitSurveyResponse, api } from '../api';
+import { api } from '../api';
 import AddressInput from '../components/AddressInput';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import { buildReachableQuestionIds, resolveJumpFromAnswer } from '../lib/jumpLogic';
+import { syncAllPendingConductSessions, syncPendingConductSession } from '../lib/offlineConductSync';
+import { appendOfflineLog } from '../lib/offlineConductLog';
+import {
+  createLocalSessionId,
+  getConductSession,
+  getLatestActiveSessionForSurvey,
+  listPendingConductSessions,
+  patchConductSession,
+  saveAudioChunk,
+  saveConductSession,
+} from '../lib/offlineConductStore';
 import { isOtherOptionText } from '../lib/options';
 
 function isTextLike(answerType) {
@@ -16,6 +27,14 @@ function blankChoiceAnswer() {
 
 function isMultiChoice(question) {
   return question?.answerType === 'checkbox' && question.allowMultiple !== false;
+}
+
+function createInitialAnswers(questions) {
+  const init = {};
+  for (const q of questions || []) {
+    init[q.id] = isTextLike(q.answerType) ? { textValue: '' } : blankChoiceAnswer();
+  }
+  return init;
 }
 
 function isQuestionAnswered(question, answer) {
@@ -52,14 +71,50 @@ export default function ConductPage() {
   const [skipAudio, setSkipAudio] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [stepPhase, setStepPhase] = useState('questions');
+  const [localSessionId, setLocalSessionId] = useState(null);
+  const [persistedAudioDurationSec, setPersistedAudioDurationSec] = useState(0);
+  const [queueInfo, setQueueInfo] = useState({ pendingCount: 0, failedCount: 0 });
+  const [queueMessage, setQueueMessage] = useState('');
+  const [recoveryMessage, setRecoveryMessage] = useState('');
 
   const recorder = useVoiceRecorder();
   const questionRefs = useRef({});
   const submitRef = useRef(null);
   const pendingScrollRef = useRef(null);
   const pendingStepRef = useRef(null);
+  const syncBusyRef = useRef(false);
 
   const isStepMode = survey?.conductMode === 'step';
+
+  const refreshQueueInfo = async () => {
+    const pending = await listPendingConductSessions();
+    setQueueInfo({
+      pendingCount: pending.filter((item) => item.status !== 'active').length,
+      failedCount: pending.filter((item) => item.status === 'failed').length,
+    });
+  };
+
+  const syncPendingQueue = async () => {
+    if (syncBusyRef.current || !navigator.onLine) return;
+    syncBusyRef.current = true;
+    try {
+      const results = await syncAllPendingConductSessions();
+      const uploaded = results.filter((item) => item?.uploaded).length;
+      if (uploaded > 0) {
+        appendOfflineLog('Фоновая синхронизация догрузила проведения', {
+          uploaded,
+        });
+        setQueueMessage(
+          uploaded === 1
+            ? 'Один сохранённый опрос успешно догружен на сервер.'
+            : `Успешно догружено проведений: ${uploaded}.`
+        );
+      }
+    } finally {
+      syncBusyRef.current = false;
+      await refreshQueueInfo();
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -71,11 +126,25 @@ export default function ConductPage() {
           setError('Черновик нельзя проводить. Опубликуйте опрос в конструкторе.');
         }
         setSurvey(data);
-        const init = {};
-        for (const q of data.questions) {
-          init[q.id] = isTextLike(q.answerType) ? { textValue: '' } : blankChoiceAnswer();
+        const init = createInitialAnswers(data.questions);
+        const restored = await getLatestActiveSessionForSurvey(Number(id));
+        if (!alive) return;
+        if (restored?.status === 'active') {
+          appendOfflineLog('Восстановлен локальный черновик проведения', {
+            localSessionId: restored.localSessionId,
+            surveyId: Number(id),
+          });
+          setAnswers(restored.draftAnswers || init);
+          setNote(restored.respondentNote || '');
+          setSkipAudio(!!restored.skipAudio);
+          setLocalSessionId(restored.localSessionId);
+          setPersistedAudioDurationSec(Number(restored.audioDurationSec) || 0);
+          setRecoveryMessage(
+            'Восстановлен локально сохранённый черновик проведения. Нажмите кнопку начала записи, чтобы продолжить.'
+          );
+        } else {
+          setAnswers(init);
         }
-        setAnswers(init);
       } catch (err) {
         if (alive) setError(err.message);
       } finally {
@@ -86,6 +155,22 @@ export default function ConductPage() {
       alive = false;
     };
   }, [id]);
+
+  useEffect(() => {
+    refreshQueueInfo().catch(() => {});
+    const onOnline = () => {
+      setQueueMessage('Связь восстановлена, пытаюсь догрузить сохранённые проведения…');
+      syncPendingQueue().catch(() => {});
+    };
+    window.addEventListener('online', onOnline);
+    const interval = window.setInterval(() => {
+      syncPendingQueue().catch(() => {});
+    }, 15000);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.clearInterval(interval);
+    };
+  }, []);
 
   const canSubmit = useMemo(() => {
     if (!survey || survey.status !== 'active' || !sessionActive) return false;
@@ -160,6 +245,29 @@ export default function ConductPage() {
     };
   }, [visibleQuestions, survey, isStepMode]);
 
+  useEffect(() => {
+    if (!localSessionId || !survey) return;
+    patchConductSession(localSessionId, {
+      surveyId: Number(id),
+      surveyTitle: survey.title || '',
+      draftAnswers: answers,
+      respondentNote: note,
+      skipAudio,
+      hasAudio: !skipAudio,
+      audioDurationSec: persistedAudioDurationSec + (recorder.isRecording ? recorder.seconds : 0),
+    }).catch(() => {});
+  }, [
+    answers,
+    id,
+    localSessionId,
+    note,
+    persistedAudioDurationSec,
+    recorder.isRecording,
+    recorder.seconds,
+    skipAudio,
+    survey,
+  ]);
+
   const resolveNextTarget = (questionId, nextAnswers) => {
     if (!survey?.questions?.length) return null;
     const questionIndex = survey.questions.findIndex((q) => Number(q.id) === Number(questionId));
@@ -184,7 +292,6 @@ export default function ConductPage() {
     const question = survey?.questions?.find((q) => Number(q.id) === Number(questionId));
     if (!question) return;
 
-    // В пошаговом режиме мультивыбор и текст не автопереходим — нужна кнопка «Далее».
     if (isStepMode && !forceAdvance) {
       if (isMultiChoice(question) || isTextLike(question.answerType)) return;
       if (!isQuestionAnswered(question, nextAnswers[questionId])) return;
@@ -211,33 +318,82 @@ export default function ConductPage() {
   const beginSession = async () => {
     setError('');
     setOk('');
+    setQueueMessage('');
+    setRecoveryMessage('');
     setStepIndex(0);
     setStepPhase('questions');
+
+    const currentId = localSessionId || createLocalSessionId();
+    const existing = localSessionId ? await getConductSession(localSessionId) : null;
+    if (!existing) {
+      await saveConductSession({
+        localSessionId: currentId,
+        surveyId: Number(id),
+        surveyTitle: survey?.title || '',
+        status: 'active',
+        draftAnswers: answers,
+        respondentNote: note,
+        skipAudio,
+        hasAudio: !skipAudio,
+        audioDurationSec: persistedAudioDurationSec || 0,
+        totalChunks: 0,
+        createdAt: new Date().toISOString(),
+      });
+      appendOfflineLog('Создан локальный черновик проведения', {
+        localSessionId: currentId,
+        surveyId: Number(id),
+      });
+      setLocalSessionId(currentId);
+    }
+
     if (skipAudio) {
       recorder.reset();
       setSessionActive(true);
+      await patchConductSession(currentId, {
+        status: 'active',
+        skipAudio: true,
+        hasAudio: false,
+        draftAnswers: answers,
+        respondentNote: note,
+      });
+      await refreshQueueInfo();
       return;
     }
-    const started = await recorder.start();
-    if (started) setSessionActive(true);
+
+    const baseChunkIndex = Number(existing?.totalChunks || 0);
+    let chunkOffset = 0;
+    const started = await recorder.start({
+      onChunk: async (blob) => {
+        const nextIndex = baseChunkIndex + chunkOffset;
+        chunkOffset += 1;
+        await saveAudioChunk(currentId, nextIndex, blob);
+        await patchConductSession(currentId, {
+          status: 'active',
+          hasAudio: true,
+          skipAudio: false,
+          audioMime: blob.type || 'audio/webm',
+          totalChunks: nextIndex + 1,
+          draftAnswers: answers,
+          respondentNote: note,
+          audioDurationSec: persistedAudioDurationSec + recorder.seconds,
+        });
+      },
+    });
+    if (started) {
+      setSessionActive(true);
+    }
+    await refreshQueueInfo();
   };
 
   const resetForNextRespondent = async () => {
-    const init = {};
-    for (const q of survey.questions) {
-      init[q.id] = isTextLike(q.answerType) ? { textValue: '' } : blankChoiceAnswer();
-    }
-    setAnswers(init);
+    setAnswers(createInitialAnswers(survey.questions));
     setNote('');
     setStepIndex(0);
     setStepPhase('questions');
+    setLocalSessionId(null);
+    setPersistedAudioDurationSec(0);
     recorder.reset();
     setSessionActive(false);
-    setOk(
-      skipAudio
-        ? 'Проведение сохранено. Нажмите «Начать проведение» для следующего респондента.'
-        : 'Проведение сохранено. Нажмите «Начать запись» для следующего респондента.'
-    );
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -328,33 +484,72 @@ export default function ConductPage() {
     setOk('');
     setBusy(true);
     try {
-      let blob = null;
-      let durationSec = 0;
+      let durationSec = persistedAudioDurationSec;
       if (!skipAudio) {
         const stopped = await recorder.stop();
-        blob = stopped.blob;
-        durationSec = stopped.durationSec;
+        durationSec += stopped.durationSec;
       }
-      const payload = {
-        respondentNote: note,
-        answers: Object.entries(answers)
-          .filter(([questionId]) => reachableQuestionIdSet.has(Number(questionId)))
-          .map(([questionId, val]) => ({
-            questionId: Number(questionId),
-            ...val,
-          })),
+
+      const currentId = localSessionId || createLocalSessionId();
+      const payloadAnswers = Object.entries(answers)
+        .filter(([questionId]) => reachableQuestionIdSet.has(Number(questionId)))
+        .map(([questionId, val]) => ({
+          questionId: Number(questionId),
+          ...val,
+        }));
+
+      const existing = (await getConductSession(currentId)) || {
+        localSessionId: currentId,
+        createdAt: new Date().toISOString(),
       };
-      await submitSurveyResponse(id, {
-        payload,
-        audioBlob: blob,
+      const queuedSession = await saveConductSession({
+        ...existing,
+        localSessionId: currentId,
+        surveyId: Number(id),
+        surveyTitle: survey?.title || '',
+        status: 'queued',
+        draftAnswers: answers,
+        answers: payloadAnswers,
+        respondentNote: note,
+        skipAudio,
+        hasAudio: !skipAudio,
+        audioMime: skipAudio ? null : existing.audioMime || 'audio/webm',
         audioDurationSec: durationSec,
+        totalChunks: skipAudio ? 0 : Number(existing.totalChunks || 0),
       });
-      await resetForNextRespondent();
+      appendOfflineLog('Проведение поставлено в локальную очередь', {
+        localSessionId: currentId,
+        surveyId: Number(id),
+        hasAudio: !skipAudio,
+        totalChunks: queuedSession.totalChunks || 0,
+      });
+
+      setPersistedAudioDurationSec(durationSec);
+
+      try {
+        const result = await syncPendingConductSession(queuedSession);
+        await resetForNextRespondent();
+        setOk(
+          result?.uploaded
+            ? skipAudio
+              ? 'Проведение сохранено и отправлено на сервер.'
+              : 'Проведение и аудиозапись сохранены и отправлены на сервер.'
+            : 'Проведение сохранено.'
+        );
+      } catch (syncErr) {
+        appendOfflineLog('Не удалось сразу отправить проведение, оставлено в очереди', {
+          localSessionId: currentId,
+          error: syncErr.message || 'Неизвестная ошибка',
+        });
+        await resetForNextRespondent();
+        setOk(
+          'Проведение сохранено на устройстве и будет автоматически отправлено, когда связь станет стабильнее.'
+        );
+        setQueueMessage(syncErr.message || 'Не удалось сразу отправить проведение на сервер.');
+      }
+      await refreshQueueInfo();
     } catch (err) {
       setError(err.message);
-      if (!skipAudio && !recorder.isRecording && sessionActive) {
-        await recorder.start();
-      }
     } finally {
       setBusy(false);
     }
@@ -511,8 +706,27 @@ export default function ConductPage() {
 
       {error && <div className="alert" style={{ marginBottom: 12 }}>{error}</div>}
       {ok && <div className="alert alert-ok" style={{ marginBottom: 12 }}>{ok}</div>}
+      {recoveryMessage && (
+        <div
+          className="alert"
+          style={{ marginBottom: 12, background: 'var(--accent-soft)', color: 'var(--accent)' }}
+        >
+          {recoveryMessage}
+        </div>
+      )}
+      {queueMessage && <div className="alert" style={{ marginBottom: 12 }}>{queueMessage}</div>}
       {!skipAudio && recorder.error && (
         <div className="alert" style={{ marginBottom: 12 }}>{recorder.error}</div>
+      )}
+      {(queueInfo.pendingCount > 0 || queueInfo.failedCount > 0) && (
+        <div
+          className="alert"
+          style={{ marginBottom: 12, background: 'var(--accent-soft)', color: 'var(--accent)' }}
+        >
+          {queueInfo.failedCount > 0
+            ? `На устройстве сохранено проведений, ожидающих догрузки: ${queueInfo.pendingCount}. Ошибок повтора: ${queueInfo.failedCount}.`
+            : `На устройстве сохранено проведений, ожидающих догрузки: ${queueInfo.pendingCount}.`}
+        </div>
       )}
 
       <div className={`recorder-panel ${!skipAudio && recorder.isRecording ? 'recorder-live' : ''}`}>
@@ -558,7 +772,13 @@ export default function ConductPage() {
               onClick={beginSession}
               disabled={survey.status !== 'active'}
             >
-              {skipAudio ? 'Начать проведение' : 'Начать запись и проведение'}
+              {localSessionId
+                ? skipAudio
+                  ? 'Продолжить проведение'
+                  : 'Продолжить запись и проведение'
+                : skipAudio
+                  ? 'Начать проведение'
+                  : 'Начать запись и проведение'}
             </button>
           </>
         )}

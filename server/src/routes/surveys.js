@@ -8,6 +8,7 @@ import {
   deleteSurveyAudioDir,
   isAllowedAudioMime,
   saveResponseAudio,
+  saveUploadChunk,
 } from '../services/audioStorage.js';
 import { parseDocxSurvey } from '../services/docxImport.js';
 import {
@@ -18,10 +19,20 @@ import {
 } from '../services/surveys.js';
 import { csvWithBom, safeFilename, toCsv } from '../services/csv.js';
 import {
-  buildReachableQuestionIds,
   validateJumpConfiguration,
 } from '../services/jumpLogic.js';
 import { formatOptionAnswer, isOtherOptionText } from '../services/optionHelpers.js';
+import {
+  createSurveyResponseRecord,
+  failUploadSession,
+  finalizeUploadSession,
+  getOrCreateUploadSession,
+  listUploadChunkIndexes,
+  loadUploadSession,
+  markUploadSessionProgress,
+  upsertUploadChunk,
+  validateResponsePayload,
+} from '../services/responseUploads.js';
 
 const router = Router();
 
@@ -622,6 +633,197 @@ router.delete('/:id', requireRoles('admin', 'editor'), async (req, res) => {
   }
 });
 
+router.post('/:id/responses/session', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const can = await userCanConduct(req.user, id);
+    if (!can.ok) {
+      const map = {
+        not_found: [404, 'Опрос не найден'],
+        archived: [403, 'Опрос в архиве'],
+        completed: [403, 'Опрос завершён'],
+        draft: [403, 'Черновик нельзя проводить'],
+        forbidden: [403, 'Нет доступа к опросу'],
+      };
+      const [code, msg] = map[can.reason] || [403, 'Нет доступа'];
+      return res.status(code).json({ error: msg });
+    }
+
+    const clientSessionId = String(req.body?.clientSessionId || '').trim();
+    if (!clientSessionId) {
+      return res.status(400).json({ error: 'Не передан clientSessionId' });
+    }
+
+    const session = await getOrCreateUploadSession({
+      surveyId: id,
+      conductedBy: req.user.id,
+      clientSessionId,
+      audioMime: req.body?.audioMime || null,
+      audioDurationSec: Number(req.body?.audioDurationSec) || null,
+    });
+
+    res.status(201).json({
+      uploadSessionId: session.id,
+      clientSessionId: session.client_session_id,
+      status: session.status,
+      responseId: session.response_id || null,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Не удалось создать сессию загрузки' });
+  }
+});
+
+router.get('/:id/responses/session/:uploadSessionId/status', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const can = await userCanConduct(req.user, id);
+    if (!can.ok) {
+      return res.status(403).json({ error: 'Нет доступа' });
+    }
+    const uploadSession = await loadUploadSession(Number(req.params.uploadSessionId));
+    if (
+      !uploadSession ||
+      Number(uploadSession.survey_id) !== id ||
+      Number(uploadSession.conducted_by) !== Number(req.user.id)
+    ) {
+      return res.status(404).json({ error: 'Сессия загрузки не найдена' });
+    }
+
+    res.json({
+      uploadSessionId: uploadSession.id,
+      clientSessionId: uploadSession.client_session_id,
+      status: uploadSession.status,
+      totalChunks: Number(uploadSession.total_chunks) || 0,
+      uploadedChunkIndexes: await listUploadChunkIndexes(uploadSession.id),
+      responseId: uploadSession.response_id || null,
+      lastError: uploadSession.last_error || null,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Не удалось получить статус загрузки' });
+  }
+});
+
+router.post(
+  '/:id/responses/session/:uploadSessionId/chunks',
+  uploadAudio.single('chunk'),
+  async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const can = await userCanConduct(req.user, id);
+      if (!can.ok) {
+        return res.status(403).json({ error: 'Нет доступа' });
+      }
+      const uploadSession = await loadUploadSession(Number(req.params.uploadSessionId));
+      if (
+        !uploadSession ||
+        Number(uploadSession.survey_id) !== id ||
+        Number(uploadSession.conducted_by) !== Number(req.user.id)
+      ) {
+        return res.status(404).json({ error: 'Сессия загрузки не найдена' });
+      }
+      if (uploadSession.status === 'finalized') {
+        return res.json({
+          uploadSessionId: uploadSession.id,
+          chunkIndex: Number(req.body?.chunkIndex) || 0,
+          alreadyUploaded: true,
+          finalized: true,
+        });
+      }
+      if (!req.file?.buffer?.length) {
+        return res.status(400).json({ error: 'Не передан аудиофрагмент' });
+      }
+      if (!isAllowedAudioMime(req.file.mimetype)) {
+        return res.status(400).json({ error: 'Неподдерживаемый формат аудио' });
+      }
+      const chunkIndex = Number(req.body?.chunkIndex);
+      if (!Number.isInteger(chunkIndex) || chunkIndex < 0) {
+        return res.status(400).json({ error: 'Некорректный номер аудиофрагмента' });
+      }
+
+      const existingIndexes = await listUploadChunkIndexes(uploadSession.id);
+      const alreadyUploaded = existingIndexes.includes(chunkIndex);
+      if (!alreadyUploaded) {
+        const saved = await saveUploadChunk({
+          uploadSessionId: uploadSession.id,
+          chunkIndex,
+          buffer: req.file.buffer,
+          mime: req.file.mimetype,
+        });
+        await upsertUploadChunk({
+          uploadSessionId: uploadSession.id,
+          chunkIndex,
+          chunkSize: saved.size,
+          relativePath: saved.relativePath,
+        });
+      }
+      await markUploadSessionProgress({
+        uploadSessionId: uploadSession.id,
+        status: 'uploading',
+        audioMime: req.file.mimetype,
+        audioDurationSec: Number(req.body?.audioDurationSec) || null,
+        totalChunks: chunkIndex + 1,
+      });
+
+      res.status(alreadyUploaded ? 200 : 201).json({
+        uploadSessionId: uploadSession.id,
+        chunkIndex,
+        alreadyUploaded,
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Не удалось сохранить аудиофрагмент' });
+    }
+  }
+);
+
+router.post('/:id/responses/session/:uploadSessionId/finalize', async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    const can = await userCanConduct(req.user, id);
+    if (!can.ok) {
+      return res.status(403).json({ error: 'Нет доступа' });
+    }
+    const uploadSession = await loadUploadSession(Number(req.params.uploadSessionId));
+    if (
+      !uploadSession ||
+      Number(uploadSession.survey_id) !== id ||
+      Number(uploadSession.conducted_by) !== Number(req.user.id)
+    ) {
+      return res.status(404).json({ error: 'Сессия загрузки не найдена' });
+    }
+
+    const payload = req.body?.payload || {};
+    const survey = await loadSurveyStructure(id);
+    validateResponsePayload(survey, payload);
+    const result = await finalizeUploadSession({
+      uploadSession,
+      survey,
+      payload,
+      totalChunks: Math.max(0, Number(req.body?.totalChunks) || 0),
+      hasAudio: !!req.body?.hasAudio,
+    });
+
+    res.status(result.reused ? 200 : 201).json({
+      id: result.responseId,
+      hasAudio: result.hasAudio,
+      message: result.hasAudio
+        ? 'Проведение сохранено с аудиозаписью'
+        : 'Проведение сохранено без аудиозаписи',
+    });
+  } catch (err) {
+    await failUploadSession(Number(req.params.uploadSessionId), err.message);
+    console.error(err);
+    const msg = err.message || 'Не удалось завершить загрузку';
+    const isValidation =
+      /Ответьте на вопрос|Выберите ответ|Некорректный вариант|Укажите текст|аудиофрагмент/i.test(
+        msg
+      );
+    res.status(isValidation ? 400 : 500).json({ error: msg });
+  }
+});
+
 /** Submit conducted survey answers + voice recording */
 router.post('/:id/responses', uploadAudio.single('audio'), async (req, res) => {
   try {
@@ -652,113 +854,18 @@ router.post('/:id/responses', uploadAudio.single('audio'), async (req, res) => {
     }
 
     const survey = await loadSurveyStructure(id);
-    const { answers = [], respondentNote } = payload;
     const audioDurationSec = Number(req.body.audioDurationSec) || null;
-    const answersByQuestionId = new Map(
-      (answers || []).map((a) => [Number(a.questionId), a])
-    );
-    const reachableQuestionIds = new Set(
-      buildReachableQuestionIds(survey.questions, answersByQuestionId)
-    );
-
-    for (const q of survey.questions) {
-      if (!reachableQuestionIds.has(Number(q.id))) continue;
-      const ans = answers.find((a) => Number(a.questionId) === q.id);
-      if (q.isRequired) {
-        if (q.answerType === 'text' || q.answerType === 'address') {
-          if (!ans || !String(ans.textValue || '').trim()) {
-            return res.status(400).json({ error: `Ответьте на вопрос: ${q.text}` });
-          }
-        } else {
-          const selected = (ans && ans.optionIds) || [];
-          if (!selected.length) {
-            return res.status(400).json({ error: `Выберите ответ: ${q.text}` });
-          }
-        }
-      }
-      if (
-        (q.answerType === 'checkbox' || q.answerType === 'select') &&
-        ans?.optionIds?.length
-      ) {
-        const singleChoice =
-          q.answerType === 'select' || (q.answerType === 'checkbox' && !q.allowMultiple);
-        if (singleChoice && ans.optionIds.length > 1) {
-          return res.status(400).json({ error: 'Можно выбрать только один вариант' });
-        }
-        const validIds = new Set(q.options.map((o) => o.id));
-        const otherTexts = ans.otherTexts || {};
-        for (const oid of ans.optionIds) {
-          const oidNum = Number(oid);
-          if (!validIds.has(oidNum)) {
-            return res.status(400).json({ error: 'Некорректный вариант ответа' });
-          }
-          const opt = q.options.find((o) => o.id === oidNum);
-          if (opt && isOtherOptionText(opt.text)) {
-            const extra = String(
-              otherTexts[oidNum] ?? otherTexts[String(oidNum)] ?? ''
-            ).trim();
-            if (!extra) {
-              return res.status(400).json({
-                error: `Укажите текст для варианта «${opt.text}» в вопросе: ${q.text}`,
-              });
-            }
-          }
-        }
-      }
+    let responseId;
+    try {
+      responseId = await createSurveyResponseRecord({
+        surveyId: id,
+        conductedBy: req.user.id,
+        payload,
+        survey,
+      });
+    } catch (validationErr) {
+      return res.status(400).json({ error: validationErr.message });
     }
-
-    const responseId = await withTransaction(async (conn) => {
-      const [resp] = await conn.execute(
-        `INSERT INTO responses (survey_id, conducted_by, respondent_note)
-         VALUES (:surveyId, :conductedBy, :note)`,
-        {
-          surveyId: id,
-          conductedBy: req.user.id,
-          note: respondentNote ? String(respondentNote).trim() : null,
-        }
-      );
-      const rid = resp.insertId;
-
-      for (const q of survey.questions) {
-        if (!reachableQuestionIds.has(Number(q.id))) continue;
-        const ans = answers.find((a) => Number(a.questionId) === q.id);
-        if (!ans) continue;
-
-        if (q.answerType === 'text' || q.answerType === 'address') {
-          const text = String(ans.textValue || '').trim();
-          if (!text) continue;
-          await conn.execute(
-            `INSERT INTO answer_values (response_id, question_id, text_value)
-             VALUES (:responseId, :questionId, :textValue)`,
-            { responseId: rid, questionId: q.id, textValue: text }
-          );
-        } else {
-          const otherTexts = ans.otherTexts || {};
-          for (const oid of ans.optionIds || []) {
-            const oidNum = Number(oid);
-            const opt = q.options.find((o) => o.id === oidNum);
-            let textValue = null;
-            if (opt && isOtherOptionText(opt.text)) {
-              textValue =
-                String(otherTexts[oidNum] ?? otherTexts[String(oidNum)] ?? '').trim() ||
-                null;
-            }
-            await conn.execute(
-              `INSERT INTO answer_values (response_id, question_id, option_id, text_value)
-               VALUES (:responseId, :questionId, :optionId, :textValue)`,
-              {
-                responseId: rid,
-                questionId: q.id,
-                optionId: oidNum,
-                textValue,
-              }
-            );
-          }
-        }
-      }
-
-      return rid;
-    });
 
     if (hasAudio) {
       try {

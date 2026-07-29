@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const AUDIO_ROOT = path.resolve(__dirname, '../../uploads/audio');
+export const AUDIO_UPLOAD_ROOT = path.resolve(__dirname, '../../uploads/audio_pending');
 
 const ALLOWED_MIME = new Set([
   'audio/webm',
@@ -18,10 +19,15 @@ const ALLOWED_MIME = new Set([
 
 export function ensureAudioRoot() {
   fs.mkdirSync(AUDIO_ROOT, { recursive: true });
+  fs.mkdirSync(AUDIO_UPLOAD_ROOT, { recursive: true });
 }
 
 export function surveyAudioDir(surveyId) {
   return path.join(AUDIO_ROOT, `survey_${surveyId}`);
+}
+
+export function uploadSessionAudioDir(uploadSessionId) {
+  return path.join(AUDIO_UPLOAD_ROOT, `session_${uploadSessionId}`);
 }
 
 export function normalizeMime(mime) {
@@ -72,6 +78,46 @@ export async function saveResponseAudio({ surveyId, responseId, buffer, mime }) 
     mime: normalizeMime(mime),
     size: buffer.length,
   };
+}
+
+export function buildUploadChunkRelativePath(uploadSessionId, chunkIndex, mime) {
+  const ext = extensionForMime(mime);
+  return `session_${uploadSessionId}/chunk_${chunkIndex}.${ext}`;
+}
+
+export async function saveUploadChunk({ uploadSessionId, chunkIndex, buffer, mime }) {
+  ensureAudioRoot();
+  const relative = buildUploadChunkRelativePath(uploadSessionId, chunkIndex, mime);
+  const dir = uploadSessionAudioDir(uploadSessionId);
+  fs.mkdirSync(dir, { recursive: true });
+  const full = path.join(AUDIO_UPLOAD_ROOT, relative.replace(/\//g, path.sep));
+  await fs.promises.writeFile(full, buffer);
+  return {
+    relativePath: relative,
+    mime: normalizeMime(mime),
+    size: buffer.length,
+  };
+}
+
+export function absoluteUploadChunkPath(relativePath) {
+  const safe = String(relativePath || '').replace(/\\/g, '/');
+  if (!safe || safe.includes('..')) return null;
+  const full = path.resolve(AUDIO_UPLOAD_ROOT, safe);
+  if (!full.startsWith(AUDIO_UPLOAD_ROOT)) return null;
+  return full;
+}
+
+export function deleteUploadChunkFile(relativePath) {
+  const full = absoluteUploadChunkPath(relativePath);
+  if (full && fs.existsSync(full)) {
+    fs.unlinkSync(full);
+  }
+}
+
+export function deleteUploadSessionAudioDir(uploadSessionId) {
+  const dir = uploadSessionAudioDir(uploadSessionId);
+  if (!fs.existsSync(dir)) return;
+  fs.rmSync(dir, { recursive: true, force: true });
 }
 
 export function deleteAudioFile(relativePath) {

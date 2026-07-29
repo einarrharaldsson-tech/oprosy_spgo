@@ -11,6 +11,7 @@ import ConstructorListPage from './pages/ConstructorListPage';
 import ConstructorEditPage from './pages/ConstructorEditPage';
 import SurveyResponsesPage from './pages/SurveyResponsesPage';
 import ImportSurveyPage from './pages/ImportSurveyPage';
+import OfflineQueuePage from './pages/OfflineQueuePage';
 function RequireAuth({ roles }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="loading">Загрузка…</div>;
@@ -38,6 +39,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route index element={<SurveysPage />} />
           <Route path="survey/:id" element={<ConductPage />} />
+            <Route path="offline-queue" element={<OfflineQueuePage />} />
           <Route element={<RequireAuth roles={['admin', 'editor']} />}>
             <Route path="completed" element={<CompletedPage />} />
           </Route>
