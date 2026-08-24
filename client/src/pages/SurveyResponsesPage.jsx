@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, downloadAuthenticated } from '../api';
 import ResponseAudio from '../components/ResponseAudio';
+import SurveyAnalytics from '../components/SurveyAnalytics';
 import { formatOptionAnswer } from '../lib/options';
 
 function answerText(q, itemAnswers) {
@@ -113,6 +114,10 @@ export default function SurveyResponsesPage() {
               {csvBusy ? 'Формирование…' : 'Скачать CSV'}
             </button>
           </div>
+
+          <SurveyAnalytics survey={survey} items={items} onError={setError} />
+
+          <h2 className="analytics__title" style={{ marginTop: 8 }}>Проведения</h2>
 
           <div className="stack">
             {items.map((item) => {
