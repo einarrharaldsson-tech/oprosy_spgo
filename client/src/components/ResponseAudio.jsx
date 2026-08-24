@@ -19,6 +19,8 @@ export default function ResponseAudio({ surveyId, responseId, audioDurationSec, 
   const [src, setSrc] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [transcribeBusy, setTranscribeBusy] = useState(false);
+  const [transcribeError, setTranscribeError] = useState('');
 
   useEffect(() => {
     let objectUrl = '';
@@ -54,6 +56,51 @@ export default function ResponseAudio({ surveyId, responseId, audioDurationSec, 
   if (error) return <p className="alert" style={{ marginTop: 8 }}>{error}</p>;
   if (!src) return null;
 
+  const downloadTranscriptionDoc = async () => {
+    setTranscribeError('');
+    setTranscribeBusy(true);
+    try {
+      const token = getToken();
+      const res = await fetch(
+        `${getApiBase()}/surveys/${surveyId}/responses/${responseId}/transcribe`,
+        {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }
+      );
+      if (!res.ok) {
+        let msg = 'Не удалось расшифровать аудио';
+        try {
+          const data = await res.json();
+          msg = data?.error || msg;
+        } catch {
+          /* ignore */
+        }
+        throw new Error(msg);
+      }
+
+      const blob = await res.blob();
+      const cd = res.headers.get('Content-Disposition') || '';
+      const m = /filename\\*=UTF-8''([^;]+)|filename=\"([^\"]+)\"/i.exec(cd);
+      const filename = m
+        ? decodeURIComponent(m[1] || m[2])
+        : `transcript_${surveyId}_${responseId}.doc`;
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setTranscribeError(err.message || 'Не удалось сформировать документ');
+    } finally {
+      setTranscribeBusy(false);
+    }
+  };
+
   return (
     <div className="audio-block">
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
@@ -64,6 +111,22 @@ export default function ResponseAudio({ surveyId, responseId, audioDurationSec, 
         </span>
       </div>
       <audio controls preload="metadata" src={src} className="audio-player" />
+      <div className="stack" style={{ marginTop: 10 }}>
+        <button
+          type="button"
+          className="btn btn-accent"
+          style={{ minHeight: 36, padding: '0 12px', width: 'fit-content' }}
+          onClick={downloadTranscriptionDoc}
+          disabled={transcribeBusy}
+        >
+          {transcribeBusy ? 'Формирование DOC…' : 'Расшифровать и скачать DOC'}
+        </button>
+        {transcribeError && (
+          <p className="alert" style={{ margin: 0 }}>
+            {transcribeError}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
