@@ -1,3 +1,3 @@
 /** Application release version — keep in sync with package.json */
-export const APP_VERSION = '1.2.11';
+export const APP_VERSION = '1.2.12';
 export const APP_VERSION_LABEL = `v${APP_VERSION}`;

@@ -13,15 +13,17 @@ function escapeHtml(s) {
     .replace(/'/g, '&#39;');
 }
 
+/** Word ignores CSS white-space on HTML/.doc — use real <br> breaks. */
 export function docHtmlFromText({ title, text }) {
+  const bodyHtml = escapeHtml(text || '').replace(/\r\n|\r|\n/g, '<br>\n');
   return `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
     <title>${escapeHtml(title || 'Опрос')}</title>
   </head>
-  <body style="font-family: Arial, sans-serif; font-size: 12pt; white-space: pre-wrap;">
-    ${escapeHtml(text || '')}
+  <body style="font-family: Arial, sans-serif; font-size: 12pt; line-height: 1.45;">
+    ${bodyHtml}
   </body>
 </html>`;
 }
@@ -43,6 +45,28 @@ export function linesFromVerboseResult(raw, fallbackText) {
   return String(fallbackText || '')
     .replace(/([.!?…])\s+/g, '$1\n')
     .trim();
+}
+
+/**
+ * Force each role utterance onto its own line, even if the model
+ * returned "Role: a Role: b" on one line.
+ */
+export function ensureRoleNewlines(text, labels = []) {
+  let out = String(text || '').replace(/\r\n|\r/g, '\n').trim();
+  const names = [...new Set(labels.map((x) => String(x || '').trim()).filter(Boolean))];
+  for (const name of names) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    out = out.replace(new RegExp(`\\s+(${escaped}\\s*:)`, 'giu'), '\n$1');
+  }
+  // Common fallbacks if custom names were not passed through cleanly.
+  out = out.replace(/\s+(Опрашивающий\s*:)/giu, '\n$1');
+  out = out.replace(/\s+(Респондент\s*:)/giu, '\n$1');
+  out = out.replace(/\s+(Администратор\s*:)/giu, '\n$1');
+  return out
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join('\n');
 }
 
 export async function transcribeAudioViaVibe({
@@ -121,14 +145,18 @@ export async function formatTranscriptByRoles({
           content:
             'Ты оформляешь уже готовую расшифровку социологического опроса. ' +
             'Нельзя добавлять, выдумывать, пересказывать или выкидывать слова. ' +
-            'Можно только разбить текст по строкам и при необходимости подписать роли.',
+            'Можно только разбить текст по строкам и при необходимости подписать роли. ' +
+            'Каждая реплика обязательно с новой строки.',
         },
         {
           role: 'user',
           content:
             `В записи обычно двое: ${interviewerLabel} и ${respondentLabel}.\n` +
-            `Если роли угадываются, начинай строки с "${interviewerLabel}:" и "${respondentLabel}:".\n` +
-            'Если роли неясны или слышен один голос, всё равно пиши по одной реплике/фразе на строку, без сплошного абзаца.\n' +
+            `Формат строго такой (каждая реплика на отдельной строке):\n` +
+            `${interviewerLabel}: текст\n` +
+            `${respondentLabel}: текст\n` +
+            'Если роли неясны или слышен один голос, всё равно пиши по одной реплике/фразе на строку.\n' +
+            'Не склеивай несколько реплик в одну строку.\n' +
             'Верни только оформленный протокол.\n\n' +
             `РАСШИФРОВКА:\n${transcript}`,
         },
@@ -143,7 +171,7 @@ export async function formatTranscriptByRoles({
   }
   const text = data?.choices?.[0]?.message?.content;
   if (!text) throw new Error('Модель не вернула оформленный текст');
-  return String(text).trim();
+  return ensureRoleNewlines(String(text).trim(), [interviewerLabel, respondentLabel]);
 }
 
 export async function transcribeSurveyAudio({ apiKey, audioBuffer, mime, interviewerLabel, respondentLabel }) {
@@ -181,7 +209,8 @@ export async function transcribeSurveyAudio({ apiKey, audioBuffer, mime, intervi
     });
   } catch (err) {
     console.error('role formatting skipped', err);
+    body = ensureRoleNewlines(body, [interviewerLabel, respondentLabel]);
   }
 
-  return body;
+  return ensureRoleNewlines(body, [interviewerLabel, respondentLabel]);
 }
