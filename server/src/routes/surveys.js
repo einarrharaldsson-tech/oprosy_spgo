@@ -22,7 +22,7 @@ import {
   validateJumpConfiguration,
 } from '../services/jumpLogic.js';
 import { formatOptionAnswer, isOtherOptionText } from '../services/optionHelpers.js';
-import { transcribeAudioViaVibe, docHtmlFromText } from '../services/vibeTranscribe.js';
+import { transcribeSurveyAudio, docHtmlFromText } from '../services/vibeTranscribe.js';
 import {
   createSurveyResponseRecord,
   failUploadSession,
@@ -1043,7 +1043,7 @@ router.get('/:id/responses/:responseId/audio', async (req, res) => {
   }
 });
 
-/** Transcribe response audio into a Word-compatible DOC (protocol + respondent analysis) */
+/** Transcribe response audio into a Word-compatible DOC (protocol by roles) */
 router.post(
   '/:id/responses/:responseId/transcribe',
   requireRoles('admin', 'editor'),
@@ -1085,90 +1085,34 @@ router.post(
         return res.status(404).json({ error: 'Файл записи отсутствует на сервере' });
       }
 
-      const answerRows = await query(
-        `SELECT av.question_id, av.option_id, av.text_value, o.text AS option_text
-           FROM answer_values av
-           LEFT JOIN options o ON o.id = av.option_id
-          WHERE av.response_id = :responseId`,
-        { responseId }
-      );
-
-      const answersByQuestion = new Map();
-      for (const a of answerRows) {
-        if (!answersByQuestion.has(a.question_id)) answersByQuestion.set(a.question_id, []);
-        answersByQuestion.get(a.question_id).push(a);
-      }
-
-      const lines = [];
-      for (const q of survey.questions || []) {
-        const qAnswers = answersByQuestion.get(q.id) || [];
-        if (!qAnswers.length) continue;
-
-        if (q.answerType === 'text' || q.answerType === 'address') {
-          const texts = qAnswers
-            .map((x) => String(x.text_value || '').trim())
-            .filter(Boolean);
-          if (texts.length) lines.push(`${q.text}: ${[...new Set(texts)].join('; ')}`);
-          continue;
-        }
-
-        const formatted = qAnswers
-          .map((x) => formatOptionAnswer(x.option_text, x.text_value))
-          .filter(Boolean);
-        if (formatted.length) lines.push(`${q.text}: ${[...new Set(formatted)].join('; ')}`);
-      }
-
-      const conductorName = response.conductor_name || response.conductor_login || 'Сотрудник';
+      const conductorName = response.conductor_name || response.conductor_login || 'Опрашивающий';
       const respondentName = response.respondent_note || 'Респондент';
-
-      const promptBase =
-        'Это аудиозапись социологического опроса на русском языке.\\n' +
-        'В разговоре обычно участвуют двое: опрашивающий и респондент.\\n' +
-        `Если роли различимы, оформляй реплики по строкам с метками "${conductorName}:" и "${respondentName}:".\\n` +
-        'Если роли различить нельзя или слышен только один голос, все равно оформляй текст по строкам, а не одним сплошным абзацем.\\n' +
-        'Сделай максимально полную дословную расшифровку всего слышимого текста.\\n' +
-        'Не сокращай, не пересказывай, не добавляй анализ, выводы, заголовки и лишнее форматирование.\\n' +
-        'Если отдельные слова слышны плохо, все равно постарайся распознать максимум текста по контексту.';
-
-      // Prompt лимит VibeCode: до ~2000 символов.
-      const prompt = String(promptBase).slice(0, 1900);
-
-      // Hotwords (спец-слова) ограничены ~500 символами — подставляем термины из опроса,
-      // чтобы снизить число пропусков слов/названий.
-      const hotwordParts = [
-        survey.title,
-        conductorName,
-        respondentName,
-        ...(survey.questions || []).flatMap((q) => [
-          q.text,
-          ...(q.options || []).map((o) => o.text),
-        ]),
-        ...lines,
-      ]
-        .map((x) => String(x || '').replace(/\s+/g, ' ').trim())
-        .filter((x) => x.length >= 3);
-
-      let hotwords = hotwordParts.join(', ');
-      hotwords = hotwords.slice(0, 480);
-
       const audioBuffer = await fs.promises.readFile(full);
       const apiKey = process.env.VIBE_API_KEY;
-      const modelId = 'bitrix/deepdml/faster-whisper-large-v3-turbo-ct2';
 
-      const { text } = await transcribeAudioViaVibe({
+      // Важно: в Whisper prompt/hotwords нельзя класть тексты вопросов —
+      // модель воспринимает их как «начало расшифровки» и зацикливается
+      // (типичный артефакт: «Вопрос 4. Вопрос 4. …»).
+      const transcriptBody = await transcribeSurveyAudio({
         apiKey,
-        modelId,
-        language: 'ru',
-        prompt,
-        hotwords,
-        temperature: 0,
-        vadFilter: false,
         audioBuffer,
         mime: response.audio_mime || 'audio/webm',
+        interviewerLabel: conductorName,
+        respondentLabel: respondentName,
       });
 
+      const header = [
+        `Социологический опрос: ${survey.title || 'Опрос'}`,
+        `Проведение #${response.id}`,
+        `Опрашивающий: ${conductorName}`,
+        `Респондент: ${respondentName}`,
+        '',
+        'Протокол расшифровки:',
+        '',
+      ].join('\n');
+
       const docTitle = `${survey.title || 'Опрос'} - проведение #${response.id}`;
-      const html = docHtmlFromText({ title: docTitle, text });
+      const html = docHtmlFromText({ title: docTitle, text: `${header}${transcriptBody}` });
 
       const filename = `transcript_${surveyId}_${responseId}.doc`;
       res.setHeader('Content-Type', 'application/msword');
