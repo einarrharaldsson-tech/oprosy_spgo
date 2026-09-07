@@ -3,7 +3,10 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './auth';
 import App from './App';
+import { initTheme } from './lib/theme';
 import './styles.css';
+
+initTheme();
 
 const basename = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') || undefined;
 

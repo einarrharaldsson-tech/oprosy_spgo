@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth';
 import AppFooter from '../components/AppFooter';
 import Brand from '../components/Brand';
+import ThemeToggle from '../components/ThemeToggle';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -28,6 +29,7 @@ export default function LoginPage() {
 
   return (
     <div className="login-page">
+      <ThemeToggle className="login-theme-toggle" />
       <form className="login-card stack" onSubmit={onSubmit}>
         <div>
           <Brand />

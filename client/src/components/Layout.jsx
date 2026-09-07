@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../auth';
 import AppFooter from './AppFooter';
 import Brand from './Brand';
+import ThemeToggle from './ThemeToggle';
 import { listPendingConductSessions } from '../lib/offlineConductStore';
 
 const ROLE_LABEL = {
@@ -38,6 +39,7 @@ export default function Layout() {
       <header className="topbar">
         <Brand />
         <div className="topbar-meta">
+          <ThemeToggle />
           <span>
             {user.fullName || user.login}
             <span className="muted"> · {ROLE_LABEL[user.role]}</span>
