@@ -30,9 +30,8 @@ export default function ResponseAudio({ surveyId, responseId, audioDurationSec, 
   const [mime, setMime] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  // Транскрибация / DOC временно отключены
-  // const [transcribeBusy, setTranscribeBusy] = useState(false);
-  // const [transcribeError, setTranscribeError] = useState('');
+  const [transcribeBusy, setTranscribeBusy] = useState(false);
+  const [transcribeError, setTranscribeError] = useState('');
 
   useEffect(() => {
     let objectUrl = '';
@@ -69,7 +68,6 @@ export default function ResponseAudio({ surveyId, responseId, audioDurationSec, 
   if (error) return <p className="alert" style={{ marginTop: 8 }}>{error}</p>;
   if (!src) return null;
 
-  /*
   const downloadTranscriptionDoc = async () => {
     setTranscribeError('');
     setTranscribeBusy(true);
@@ -88,7 +86,7 @@ export default function ResponseAudio({ surveyId, responseId, audioDurationSec, 
           const data = await res.json();
           msg = data?.error || msg;
         } catch {
-          // ignore
+          /* ignore */
         }
         throw new Error(msg);
       }
@@ -114,7 +112,6 @@ export default function ResponseAudio({ surveyId, responseId, audioDurationSec, 
       setTranscribeBusy(false);
     }
   };
-  */
 
   const downloadAudio = () => {
     const a = document.createElement('a');
@@ -135,7 +132,7 @@ export default function ResponseAudio({ surveyId, responseId, audioDurationSec, 
         </span>
       </div>
       <audio controls preload="metadata" src={src} className="audio-player" />
-      <div className="stack" style={{ marginTop: 10 }}>
+      <div className="row" style={{ marginTop: 10, gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <button
           type="button"
           className="btn btn-accent"
@@ -144,23 +141,24 @@ export default function ResponseAudio({ surveyId, responseId, audioDurationSec, 
         >
           Скачать аудио
         </button>
-        {/*
         <button
           type="button"
-          className="btn btn-accent"
+          className="btn btn-primary"
           style={{ minHeight: 36, padding: '0 12px', width: 'fit-content' }}
           onClick={downloadTranscriptionDoc}
           disabled={transcribeBusy}
         >
           {transcribeBusy ? 'Формирование DOC…' : 'Расшифровать и скачать DOC'}
         </button>
-        {transcribeError && (
-          <p className="alert" style={{ margin: 0 }}>
-            {transcribeError}
-          </p>
-        )}
-        */}
       </div>
+      <p className="muted" style={{ margin: '6px 0 0', fontSize: '0.8rem', lineHeight: 1.35 }}>
+        Речевая аналитика работает в тестовом режиме. Возможны ошибки.
+      </p>
+      {transcribeError && (
+        <p className="alert" style={{ marginTop: 8 }}>
+          {transcribeError}
+        </p>
+      )}
     </div>
   );
 }

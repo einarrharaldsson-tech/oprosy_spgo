@@ -1,8 +1,11 @@
-const VIBE_BASE_URL = 'https://vibecode.bitrix24.tech/v1';
-const TRANSCRIBE_URL = `${VIBE_BASE_URL}/audio/transcriptions`;
-const CHAT_URL = `${VIBE_BASE_URL}/chat/completions`;
-const WHISPER_MODEL = 'bitrix/deepdml/faster-whisper-large-v3-turbo-ct2';
-const CHAT_MODEL = 'bitrix/bitrixgpt-5.5';
+const AITUNNEL_BASE_URL = (process.env.AITUNNEL_BASE_URL || 'https://api.aitunnel.ru/v1').replace(
+  /\/$/,
+  ''
+);
+const TRANSCRIBE_URL = `${AITUNNEL_BASE_URL}/audio/transcriptions`;
+const CHAT_URL = `${AITUNNEL_BASE_URL}/chat/completions`;
+const ASR_MODEL = process.env.AITUNNEL_ASR_MODEL || 'qwen3-asr-1.7b';
+const CHAT_MODEL = process.env.AITUNNEL_CHAT_MODEL || 'gpt-4o-mini';
 
 function escapeHtml(s) {
   return String(s || '')
@@ -58,7 +61,6 @@ export function ensureRoleNewlines(text, labels = []) {
     const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     out = out.replace(new RegExp(`\\s+(${escaped}\\s*:)`, 'giu'), '\n$1');
   }
-  // Common fallbacks if custom names were not passed through cleanly.
   out = out.replace(/\s+(Опрашивающий\s*:)/giu, '\n$1');
   out = out.replace(/\s+(Респондент\s*:)/giu, '\n$1');
   out = out.replace(/\s+(Администратор\s*:)/giu, '\n$1');
@@ -69,38 +71,59 @@ export function ensureRoleNewlines(text, labels = []) {
     .join('\n');
 }
 
-export async function transcribeAudioViaVibe({
+function filenameForMime(mime) {
+  const m = String(mime || '').toLowerCase();
+  if (m.includes('mpeg') || m.includes('mp3')) return 'audio.mp3';
+  if (m.includes('mp4') || m.includes('m4a')) return 'audio.m4a';
+  if (m.includes('ogg')) return 'audio.ogg';
+  if (m.includes('wav')) return 'audio.wav';
+  if (m.includes('flac')) return 'audio.flac';
+  if (m.includes('aac')) return 'audio.aac';
+  return 'audio.webm';
+}
+
+export function resolveAiTunnelApiKey(explicit) {
+  return (
+    explicit ||
+    process.env.AITUNNEL_API_KEY ||
+    process.env.VIBE_API_KEY || // legacy fallback
+    ''
+  ).trim();
+}
+
+/**
+ * Speech-to-text via AITunnel (OpenAI-compatible /audio/transcriptions).
+ * Docs: https://aitunnel.ru/docs/speech-to-text
+ */
+export async function transcribeAudioViaAiTunnel({
   apiKey,
-  modelId = WHISPER_MODEL,
+  modelId = ASR_MODEL,
   language = 'ru',
-  prompt,
   audioBuffer,
   mime,
-  hotwords,
   temperature = 0,
-  vadFilter = false,
   responseFormat = 'verbose_json',
 }) {
-  if (!apiKey) {
-    throw new Error('VIBE_API_KEY не задан (проставьте в env на сервере)');
+  const key = resolveAiTunnelApiKey(apiKey);
+  if (!key) {
+    throw new Error('AITUNNEL_API_KEY не задан (проставьте в .env на сервере)');
   }
   if (!audioBuffer || !audioBuffer.length) {
     throw new Error('Пустой аудиофайл');
   }
+
   const form = new FormData();
+  const filename = filenameForMime(mime);
   const blob = new Blob([audioBuffer], { type: mime || 'audio/webm' });
-  form.append('file', blob, 'audio.webm');
+  form.append('file', blob, filename);
+  form.append('model', modelId);
   if (language) form.append('language', language);
-  if (modelId) form.append('model', modelId);
-  if (prompt) form.append('prompt', prompt);
-  if (hotwords) form.append('hotwords', hotwords);
   if (typeof temperature === 'number') form.append('temperature', String(temperature));
-  if (typeof vadFilter === 'boolean') form.append('vad_filter', String(vadFilter));
-  form.append('response_format', responseFormat);
+  if (responseFormat) form.append('response_format', responseFormat);
 
   const res = await fetch(TRANSCRIBE_URL, {
     method: 'POST',
-    headers: { 'X-Api-Key': apiKey },
+    headers: { Authorization: `Bearer ${key}` },
     body: form,
   });
 
@@ -110,7 +133,7 @@ export async function transcribeAudioViaVibe({
       data?.error?.message ||
       data?.error?.type ||
       data?.message ||
-      (typeof data === 'string' ? data : `VibeCode ошибка: ${res.status}`);
+      (typeof data === 'string' ? data : `AITunnel ошибка: ${res.status}`);
     const err = new Error(msg);
     err.status = res.status;
     err.data = data;
@@ -119,10 +142,13 @@ export async function transcribeAudioViaVibe({
 
   const text = typeof data === 'string' ? data : data?.text;
   if (!text) {
-    throw new Error('VibeCode не вернул поле text');
+    throw new Error('AITunnel не вернул поле text');
   }
   return { text, raw: typeof data === 'string' ? { text: data } : data };
 }
+
+/** @deprecated use transcribeAudioViaAiTunnel */
+export const transcribeAudioViaVibe = transcribeAudioViaAiTunnel;
 
 export async function formatTranscriptByRoles({
   apiKey,
@@ -130,10 +156,11 @@ export async function formatTranscriptByRoles({
   interviewerLabel = 'Опрашивающий',
   respondentLabel = 'Респондент',
 }) {
+  const key = resolveAiTunnelApiKey(apiKey);
   const res = await fetch(CHAT_URL, {
     method: 'POST',
     headers: {
-      'X-Api-Key': apiKey,
+      Authorization: `Bearer ${key}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -174,27 +201,31 @@ export async function formatTranscriptByRoles({
   return ensureRoleNewlines(String(text).trim(), [interviewerLabel, respondentLabel]);
 }
 
-export async function transcribeSurveyAudio({ apiKey, audioBuffer, mime, interviewerLabel, respondentLabel }) {
-  const first = await transcribeAudioViaVibe({
+export async function transcribeSurveyAudio({
+  apiKey,
+  audioBuffer,
+  mime,
+  interviewerLabel,
+  respondentLabel,
+}) {
+  const first = await transcribeAudioViaAiTunnel({
     apiKey,
     audioBuffer,
     mime,
     language: 'ru',
     temperature: 0,
-    vadFilter: false,
     responseFormat: 'verbose_json',
   });
   let body = linesFromVerboseResult(first.raw, first.text);
 
   if (looksLikeRepetitionLoop(body)) {
-    const retry = await transcribeAudioViaVibe({
+    const retry = await transcribeAudioViaAiTunnel({
       apiKey,
       audioBuffer,
       mime,
       language: 'ru',
       temperature: 0.2,
-      vadFilter: false,
-      responseFormat: 'verbose_json',
+      responseFormat: 'json',
     });
     const retryBody = linesFromVerboseResult(retry.raw, retry.text);
     if (!looksLikeRepetitionLoop(retryBody)) body = retryBody;

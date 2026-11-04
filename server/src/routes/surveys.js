@@ -1082,7 +1082,7 @@ router.post(
         return res.status(400).json({ error: 'У этого проведения нет аудио' });
       }
 
-      // В документации VibeCode лимит аудио для /audio/transcriptions: до ~25 МБ
+      // AITunnel / OpenAI-compatible transcriptions: лимит файла ~25 МБ
       if (response.audio_size && response.audio_size > 25 * 1024 * 1024) {
         return res.status(413).json({ error: 'Аудиозапись слишком длинная для транскрибации' });
       }
@@ -1095,11 +1095,8 @@ router.post(
       const conductorName = response.conductor_name || response.conductor_login || 'Опрашивающий';
       const respondentName = response.respondent_note || 'Респондент';
       const audioBuffer = await fs.promises.readFile(full);
-      const apiKey = process.env.VIBE_API_KEY;
+      const apiKey = process.env.AITUNNEL_API_KEY || process.env.VIBE_API_KEY;
 
-      // Важно: в Whisper prompt/hotwords нельзя класть тексты вопросов —
-      // модель воспринимает их как «начало расшифровки» и зацикливается
-      // (типичный артефакт: «Вопрос 4. Вопрос 4. …»).
       const transcriptBody = await transcribeSurveyAudio({
         apiKey,
         audioBuffer,

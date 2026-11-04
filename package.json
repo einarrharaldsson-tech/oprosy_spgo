@@ -1,6 +1,6 @@
 {
   "name": "oprosy",
-  "version": "1.2.14",
+  "version": "1.2.16",
   "private": true,
   "description": "Веб-приложение для проведения опросов",
   "scripts": {
