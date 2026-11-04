@@ -926,6 +926,7 @@ router.get('/:id/responses/export.csv', requireRoles('admin', 'editor'), async (
 
     const responses = await query(
       `SELECT r.id, r.respondent_note, r.created_at, r.audio_path, r.audio_duration_sec,
+              r.geo_lat, r.geo_lng, r.geo_accuracy_m,
               u.full_name AS conductor_name, u.login AS conductor_login
        FROM responses r
        JOIN users u ON u.id = r.conducted_by
@@ -943,6 +944,9 @@ router.get('/:id/responses/export.csv', requireRoles('admin', 'editor'), async (
       'Пометка',
       'Аудио',
       'Длительность аудио (сек)',
+      'Широта',
+      'Долгота',
+      'Точность GPS (м)',
       ...questions.map((q, i) => `В${i + 1}. ${q.text}`),
     ];
 
@@ -983,6 +987,9 @@ router.get('/:id/responses/export.csv', requireRoles('admin', 'editor'), async (
         r.respondent_note || '',
         r.audio_path ? 'да' : 'нет',
         r.audio_duration_sec || '',
+        r.geo_lat != null ? r.geo_lat : '',
+        r.geo_lng != null ? r.geo_lng : '',
+        r.geo_accuracy_m != null ? r.geo_accuracy_m : '',
         ...cells,
       ]);
     });
@@ -1142,6 +1149,7 @@ router.get('/:id/responses', requireRoles('admin', 'editor'), async (req, res) =
     const responses = await query(
       `SELECT r.id, r.respondent_note, r.created_at,
               r.audio_path, r.audio_mime, r.audio_size, r.audio_duration_sec,
+              r.geo_lat, r.geo_lng, r.geo_accuracy_m, r.geo_captured_at,
               u.full_name AS conductor_name, u.login AS conductor_login
        FROM responses r
        JOIN users u ON u.id = r.conducted_by
@@ -1182,6 +1190,15 @@ router.get('/:id/responses', requireRoles('admin', 'editor'), async (req, res) =
       audioMime: r.audio_mime,
       audioSize: r.audio_size,
       audioDurationSec: r.audio_duration_sec,
+      geo:
+        r.geo_lat != null && r.geo_lng != null
+          ? {
+              lat: Number(r.geo_lat),
+              lng: Number(r.geo_lng),
+              accuracy: r.geo_accuracy_m != null ? Number(r.geo_accuracy_m) : null,
+              capturedAt: r.geo_captured_at || null,
+            }
+          : null,
       answers: byResponse.get(r.id) || [],
     }));
 

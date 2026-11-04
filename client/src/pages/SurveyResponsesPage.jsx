@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, downloadAuthenticated } from '../api';
 import ResponseAudio from '../components/ResponseAudio';
+import ResponseGeoMap from '../components/ResponseGeoMap';
 import SurveyAnalytics from '../components/SurveyAnalytics';
 import { formatOptionAnswer } from '../lib/options';
 
@@ -126,6 +127,7 @@ export default function SurveyResponsesPage() {
                 item.conductorName,
                 item.respondentNote,
                 item.hasAudio ? 'есть аудио' : 'без аудио',
+                item.geo ? 'есть гео' : null,
               ]
                 .filter(Boolean)
                 .join(' · ');
@@ -170,6 +172,8 @@ export default function SurveyResponsesPage() {
                           Аудиозапись отсутствует
                         </p>
                       )}
+
+                      <ResponseGeoMap geo={item.geo} />
 
                       <div className="stack" style={{ marginTop: 12 }}>
                         {(survey?.questions || []).map((q) => (

@@ -103,6 +103,7 @@ export async function syncPendingConductSession(session) {
         payload: {
           respondentNote: session.respondentNote || '',
           answers: session.answers || [],
+          geo: session.geo || null,
         },
         totalChunks: localChunkIndexes.length,
         hasAudio: !!session.hasAudio,

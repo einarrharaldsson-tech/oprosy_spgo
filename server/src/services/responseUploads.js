@@ -70,6 +70,36 @@ export function validateResponsePayload(survey, payload) {
   };
 }
 
+/** Normalize client geo payload into DB-ready fields (or all null). */
+export function parseGeoFromPayload(payload) {
+  const geo = payload?.geo;
+  if (!geo || typeof geo !== 'object') {
+    return { geoLat: null, geoLng: null, geoAccuracyM: null, geoCapturedAt: null };
+  }
+  const lat = Number(geo.lat);
+  const lng = Number(geo.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return { geoLat: null, geoLng: null, geoAccuracyM: null, geoCapturedAt: null };
+  }
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return { geoLat: null, geoLng: null, geoAccuracyM: null, geoCapturedAt: null };
+  }
+  const accuracy = Number(geo.accuracy);
+  let capturedAt = null;
+  if (geo.capturedAt) {
+    const d = new Date(geo.capturedAt);
+    if (!Number.isNaN(d.getTime())) capturedAt = d;
+  } else {
+    capturedAt = new Date();
+  }
+  return {
+    geoLat: lat,
+    geoLng: lng,
+    geoAccuracyM: Number.isFinite(accuracy) && accuracy >= 0 ? accuracy : null,
+    geoCapturedAt: capturedAt,
+  };
+}
+
 export async function createSurveyResponseRecord({
   surveyId,
   conductedBy,
@@ -77,14 +107,23 @@ export async function createSurveyResponseRecord({
   survey,
 }) {
   const { answers, reachableQuestionIds } = validateResponsePayload(survey, payload);
+  const geo = parseGeoFromPayload(payload);
   return withTransaction(async (conn) => {
     const [resp] = await conn.execute(
-      `INSERT INTO responses (survey_id, conducted_by, respondent_note)
-       VALUES (:surveyId, :conductedBy, :note)`,
+      `INSERT INTO responses
+         (survey_id, conducted_by, respondent_note,
+          geo_lat, geo_lng, geo_accuracy_m, geo_captured_at)
+       VALUES
+         (:surveyId, :conductedBy, :note,
+          :geoLat, :geoLng, :geoAccuracyM, :geoCapturedAt)`,
       {
         surveyId,
         conductedBy,
         note: payload.respondentNote ? String(payload.respondentNote).trim() : null,
+        geoLat: geo.geoLat,
+        geoLng: geo.geoLng,
+        geoAccuracyM: geo.geoAccuracyM,
+        geoCapturedAt: geo.geoCapturedAt,
       }
     );
     const responseId = resp.insertId;

@@ -15,12 +15,24 @@ function formatDuration(sec) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+function extFromMime(mime) {
+  if (!mime) return 'webm';
+  if (mime.includes('ogg')) return 'ogg';
+  if (mime.includes('mpeg') || mime.includes('mp3')) return 'mp3';
+  if (mime.includes('mp4') || mime.includes('m4a')) return 'm4a';
+  if (mime.includes('wav')) return 'wav';
+  if (mime.includes('webm')) return 'webm';
+  return 'webm';
+}
+
 export default function ResponseAudio({ surveyId, responseId, audioDurationSec, audioSize }) {
   const [src, setSrc] = useState('');
+  const [mime, setMime] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [transcribeBusy, setTranscribeBusy] = useState(false);
-  const [transcribeError, setTranscribeError] = useState('');
+  // Транскрибация / DOC временно отключены
+  // const [transcribeBusy, setTranscribeBusy] = useState(false);
+  // const [transcribeError, setTranscribeError] = useState('');
 
   useEffect(() => {
     let objectUrl = '';
@@ -37,6 +49,7 @@ export default function ResponseAudio({ surveyId, responseId, audioDurationSec, 
         if (!res.ok) throw new Error('Не удалось загрузить запись');
         const blob = await res.blob();
         if (!alive) return;
+        setMime(blob.type || res.headers.get('Content-Type') || '');
         objectUrl = URL.createObjectURL(blob);
         setSrc(objectUrl);
       } catch (err) {
@@ -56,6 +69,7 @@ export default function ResponseAudio({ surveyId, responseId, audioDurationSec, 
   if (error) return <p className="alert" style={{ marginTop: 8 }}>{error}</p>;
   if (!src) return null;
 
+  /*
   const downloadTranscriptionDoc = async () => {
     setTranscribeError('');
     setTranscribeBusy(true);
@@ -74,14 +88,14 @@ export default function ResponseAudio({ surveyId, responseId, audioDurationSec, 
           const data = await res.json();
           msg = data?.error || msg;
         } catch {
-          /* ignore */
+          // ignore
         }
         throw new Error(msg);
       }
 
       const blob = await res.blob();
       const cd = res.headers.get('Content-Disposition') || '';
-      const m = /filename\\*=UTF-8''([^;]+)|filename=\"([^\"]+)\"/i.exec(cd);
+      const m = /filename\*=UTF-8''([^;]+)|filename="([^"]+)"/i.exec(cd);
       const filename = m
         ? decodeURIComponent(m[1] || m[2])
         : `transcript_${surveyId}_${responseId}.doc`;
@@ -100,6 +114,16 @@ export default function ResponseAudio({ surveyId, responseId, audioDurationSec, 
       setTranscribeBusy(false);
     }
   };
+  */
+
+  const downloadAudio = () => {
+    const a = document.createElement('a');
+    a.href = src;
+    a.download = `survey_${surveyId}_response_${responseId}.${extFromMime(mime)}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
 
   return (
     <div className="audio-block">
@@ -116,6 +140,15 @@ export default function ResponseAudio({ surveyId, responseId, audioDurationSec, 
           type="button"
           className="btn btn-accent"
           style={{ minHeight: 36, padding: '0 12px', width: 'fit-content' }}
+          onClick={downloadAudio}
+        >
+          Скачать аудио
+        </button>
+        {/*
+        <button
+          type="button"
+          className="btn btn-accent"
+          style={{ minHeight: 36, padding: '0 12px', width: 'fit-content' }}
           onClick={downloadTranscriptionDoc}
           disabled={transcribeBusy}
         >
@@ -126,6 +159,7 @@ export default function ResponseAudio({ surveyId, responseId, audioDurationSec, 
             {transcribeError}
           </p>
         )}
+        */}
       </div>
     </div>
   );

@@ -15,6 +15,7 @@ import {
   saveAudioChunk,
   saveConductSession,
 } from '../lib/offlineConductStore';
+import { formatGeoStatus, requestConductGeo } from '../lib/geolocation';
 import { isOtherOptionText } from '../lib/options';
 
 function isTextLike(answerType) {
@@ -76,6 +77,8 @@ export default function ConductPage() {
   const [queueInfo, setQueueInfo] = useState({ pendingCount: 0, failedCount: 0 });
   const [queueMessage, setQueueMessage] = useState('');
   const [recoveryMessage, setRecoveryMessage] = useState('');
+  const [geo, setGeo] = useState(null);
+  const [geoStatus, setGeoStatus] = useState('idle'); // idle | pending | ok | denied | unavailable
 
   const recorder = useVoiceRecorder();
   const questionRefs = useRef({});
@@ -139,6 +142,10 @@ export default function ConductPage() {
           setSkipAudio(!!restored.skipAudio);
           setLocalSessionId(restored.localSessionId);
           setPersistedAudioDurationSec(Number(restored.audioDurationSec) || 0);
+          if (restored.geo?.lat != null && restored.geo?.lng != null) {
+            setGeo(restored.geo);
+            setGeoStatus('ok');
+          }
           setRecoveryMessage(
             'Восстановлен локально сохранённый черновик проведения. Нажмите кнопку начала записи, чтобы продолжить.'
           );
@@ -255,9 +262,11 @@ export default function ConductPage() {
       skipAudio,
       hasAudio: !skipAudio,
       audioDurationSec: persistedAudioDurationSec + (recorder.isRecording ? recorder.seconds : 0),
+      geo: geo || null,
     }).catch(() => {});
   }, [
     answers,
+    geo,
     id,
     localSessionId,
     note,
@@ -315,6 +324,28 @@ export default function ConductPage() {
     pendingScrollRef.current = { type: 'question', questionId: target };
   };
 
+  const captureGeoIfNeeded = async (existingGeo) => {
+    if (existingGeo?.lat != null && existingGeo?.lng != null) {
+      setGeo(existingGeo);
+      setGeoStatus('ok');
+      return existingGeo;
+    }
+    if (geo?.lat != null && geo?.lng != null) {
+      setGeoStatus('ok');
+      return geo;
+    }
+    setGeoStatus('pending');
+    const next = await requestConductGeo();
+    if (next) {
+      setGeo(next);
+      setGeoStatus('ok');
+      return next;
+    }
+    setGeo(null);
+    setGeoStatus(navigator.geolocation ? 'denied' : 'unavailable');
+    return null;
+  };
+
   const beginSession = async () => {
     setError('');
     setOk('');
@@ -325,6 +356,8 @@ export default function ConductPage() {
 
     const currentId = localSessionId || createLocalSessionId();
     const existing = localSessionId ? await getConductSession(localSessionId) : null;
+    const capturedGeo = await captureGeoIfNeeded(existing?.geo || geo);
+
     if (!existing) {
       await saveConductSession({
         localSessionId: currentId,
@@ -337,13 +370,17 @@ export default function ConductPage() {
         hasAudio: !skipAudio,
         audioDurationSec: persistedAudioDurationSec || 0,
         totalChunks: 0,
+        geo: capturedGeo,
         createdAt: new Date().toISOString(),
       });
       appendOfflineLog('Создан локальный черновик проведения', {
         localSessionId: currentId,
         surveyId: Number(id),
+        hasGeo: !!capturedGeo,
       });
       setLocalSessionId(currentId);
+    } else if (capturedGeo) {
+      await patchConductSession(currentId, { geo: capturedGeo });
     }
 
     if (skipAudio) {
@@ -355,6 +392,7 @@ export default function ConductPage() {
         hasAudio: false,
         draftAnswers: answers,
         respondentNote: note,
+        geo: capturedGeo,
       });
       await refreshQueueInfo();
       return;
@@ -376,6 +414,7 @@ export default function ConductPage() {
           draftAnswers: answers,
           respondentNote: note,
           audioDurationSec: persistedAudioDurationSec + recorder.seconds,
+          geo: capturedGeo || geo,
         });
       },
     });
@@ -392,6 +431,8 @@ export default function ConductPage() {
     setStepPhase('questions');
     setLocalSessionId(null);
     setPersistedAudioDurationSec(0);
+    setGeo(null);
+    setGeoStatus('idle');
     recorder.reset();
     setSessionActive(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -516,6 +557,7 @@ export default function ConductPage() {
         audioMime: skipAudio ? null : existing.audioMime || 'audio/webm',
         audioDurationSec: durationSec,
         totalChunks: skipAudio ? 0 : Number(existing.totalChunks || 0),
+        geo: geo || existing.geo || null,
       });
       appendOfflineLog('Проведение поставлено в локальную очередь', {
         localSessionId: currentId,
@@ -742,6 +784,11 @@ export default function ConductPage() {
                   ? 'Идёт запись — заполняйте ответы, затем сохраните проведение'
                   : 'Перед опросом включите микрофон планшета'}
             </p>
+            {(geoStatus !== 'idle' || geo) && (
+              <p className="muted" style={{ margin: '6px 0 0', fontSize: '0.9rem' }}>
+                {formatGeoStatus(geo, geoStatus)}
+              </p>
+            )}
           </div>
           {!skipAudio && (
             <div className="recorder-timer" aria-live="polite">

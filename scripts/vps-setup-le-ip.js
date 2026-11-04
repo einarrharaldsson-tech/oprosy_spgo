@@ -196,18 +196,47 @@ async function main() {
   await sftpWrite(conn, '/etc/nginx/sites-available/oprosy', nginxHttps);
   await exec(conn, 'nginx -t && systemctl reload nginx; ufw allow 443/tcp || true');
 
-  // 5) Cron every 5 days at 03:15 — renew + reload nginx
+  // 5) Renew every 3 days at 03:15 — shortlived IP certs last ~6 days
+  const renewScript = `#!/bin/bash
+# Renew Let's Encrypt short-lived IP certificate (~6 days).
+set -euo pipefail
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/snap/bin:\${PATH}"
+LOG=/var/log/oprosy-certbot-renew.log
+IP="${HOST}"
+WEBROOT=/var/www/certbot
+LIVE="/etc/letsencrypt/live/\${IP}"
+exec >>"\$LOG" 2>&1
+echo "==== \$(date -Is) renew start ===="
+if certbot renew --quiet --deploy-hook "systemctl reload nginx"; then
+  echo "certbot renew ok"
+else
+  echo "certbot renew failed — re-issuing IP shortlived cert"
+  mkdir -p "\${WEBROOT}/.well-known/acme-challenge"
+  chown -R www-data:www-data "\${WEBROOT}" || true
+  certbot certonly --non-interactive --agree-tos --register-unsafely-without-email \\
+    --preferred-profile shortlived \\
+    --webroot --webroot-path "\${WEBROOT}" \\
+    --ip-address "\${IP}" \\
+    --deploy-hook "systemctl reload nginx" \\
+    --force-renewal
+fi
+[[ -f "\${LIVE}/fullchain.pem" ]] && openssl x509 -in "\${LIVE}/fullchain.pem" -noout -dates -subject || true
+echo "==== \$(date -Is) renew done ===="
+`;
+  await sftpWrite(conn, '/usr/local/bin/oprosy-certbot-renew', renewScript);
   await sftpWrite(
     conn,
     '/etc/cron.d/oprosy-certbot',
     `# Renew Let's Encrypt short-lived IP certificate (~6 days)
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/snap/bin
-15 3 */5 * * root certbot renew --quiet --deploy-hook "systemctl reload nginx" >> /var/log/oprosy-certbot-renew.log 2>&1
+15 3 */3 * * root /usr/local/bin/oprosy-certbot-renew >> /var/log/oprosy-certbot-renew.log 2>&1
 `
   );
-  await exec(conn, 'chmod 644 /etc/cron.d/oprosy-certbot; cat /etc/cron.d/oprosy-certbot');
-
+  await exec(
+    conn,
+    'chmod 755 /usr/local/bin/oprosy-certbot-renew; chmod 644 /etc/cron.d/oprosy-certbot; cat /etc/cron.d/oprosy-certbot'
+  );
   // 6) Update CLIENT_URL in .env
   await exec(
     conn,
@@ -226,7 +255,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/snap/bin
 
   console.log('\n=== HTTPS ready ===');
   console.log(`Open: https://${HOST}/`);
-  console.log('Cron: every 5 days at 03:15 (certbot renew)');
+  console.log('Cron: every 3 days at 03:15 (/usr/local/bin/oprosy-certbot-renew)');
   conn.end();
 }
 
