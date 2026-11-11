@@ -179,8 +179,7 @@ export default function ConductGeoPicker({
       {open && (
         <div className="conduct-geo-picker__panel">
           <p className="muted conduct-geo-picker__hint">
-            Нажмите на карту или перетащите маркер, чтобы поставить точку вручную.
-            GPS подставляется автоматически — метку можно поправить.
+            Нажмите на карту или перетащите маркер, чтобы поставить или поправить точку.
           </p>
           <div
             ref={mapElRef}
@@ -191,7 +190,6 @@ export default function ConductGeoPicker({
           {hasValidPoint(geo) && (
             <p className="muted conduct-geo-picker__coords">
               {formatCoord(geo.lat)}, {formatCoord(geo.lng)}
-              {geo.source === 'manual' ? ' · вручную' : ''}
             </p>
           )}
           <div className="conduct-geo-picker__actions">
