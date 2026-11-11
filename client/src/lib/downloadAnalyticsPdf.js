@@ -17,6 +17,21 @@ async function captureBlock(element) {
   };
 }
 
+/** For geo blocks: hide Leaflet/OSM tiles and show the self-contained SVG schema. */
+async function captureGeoBlock(element) {
+  const map = element.querySelector('[data-pdf-ignore-map]');
+  const schema = element.querySelector('[data-pdf-schema]');
+  const prevHidden = schema ? schema.hidden : null;
+  if (map) map.setAttribute('data-html2canvas-ignore', 'true');
+  if (schema) schema.hidden = false;
+  try {
+    return await captureBlock(element);
+  } finally {
+    if (map) map.removeAttribute('data-html2canvas-ignore');
+    if (schema && prevHidden != null) schema.hidden = prevHidden;
+  }
+}
+
 function sizeForPage(block, usableWidth, usableHeight) {
   let drawW = usableWidth;
   let drawH = (block.height * drawW) / block.width;
@@ -37,7 +52,7 @@ export async function downloadAnalyticsPdf(element, filename) {
   const blocks = [];
   if (header) blocks.push(await captureBlock(header));
   for (const geo of geoBlocks) {
-    blocks.push(await captureBlock(geo));
+    blocks.push(await captureGeoBlock(geo));
   }
   for (const card of cards) {
     blocks.push(await captureBlock(card));

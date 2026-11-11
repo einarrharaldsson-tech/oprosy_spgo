@@ -859,6 +859,24 @@ a {
   border: 1px solid var(--line);
 }
 
+.analytics-geo__schema {
+  margin-top: 10px;
+}
+
+.analytics-geo__schema svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.analytics-geo__schema-note {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+}
+
 .analytics-geo__list {
   margin: 12px 0 0;
   padding: 0;

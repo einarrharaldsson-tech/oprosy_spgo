@@ -28,19 +28,54 @@ function collectPoints(items) {
       lat,
       lng,
       conductorName: item.conductorName || '',
-      createdAt: item.createdAt || null,
     });
   }
   return points;
 }
 
+function projectPoints(points, width, height, pad = 28) {
+  if (!points.length) return [];
+  let minLat = points[0].lat;
+  let maxLat = points[0].lat;
+  let minLng = points[0].lng;
+  let maxLng = points[0].lng;
+  for (const p of points) {
+    minLat = Math.min(minLat, p.lat);
+    maxLat = Math.max(maxLat, p.lat);
+    minLng = Math.min(minLng, p.lng);
+    maxLng = Math.max(maxLng, p.lng);
+  }
+  // Keep a usable scale when all points coincide.
+  if (maxLat - minLat < 0.0008) {
+    minLat -= 0.0004;
+    maxLat += 0.0004;
+  }
+  if (maxLng - minLng < 0.0008) {
+    minLng -= 0.0004;
+    maxLng += 0.0004;
+  }
+  const spanLat = maxLat - minLat;
+  const spanLng = maxLng - minLng;
+  const innerW = width - pad * 2;
+  const innerH = height - pad * 2;
+  return points.map((p) => ({
+    ...p,
+    x: pad + ((p.lng - minLng) / spanLng) * innerW,
+    // SVG y grows downward; north (higher lat) should be higher on the page.
+    y: pad + ((maxLat - p.lat) / spanLat) * innerH,
+  }));
+}
+
 /**
  * Consolidated map of all response geotags for the analytics report / PDF.
+ * Screen: OpenStreetMap (same as the rest of the app).
+ * PDF: self-contained SVG schema — no third-party tile services.
  */
 export default function AnalyticsGeoMap({ items }) {
   const mapElRef = useRef(null);
   const mapRef = useRef(null);
   const points = useMemo(() => collectPoints(items), [items]);
+  const schemaPoints = useMemo(() => projectPoints(points, 640, 280), [points]);
   const total = items?.length || 0;
 
   useEffect(() => {
@@ -58,13 +93,9 @@ export default function AnalyticsGeoMap({ items }) {
     });
     map.attributionControl.setPrefix(false);
 
-    // Carto tiles usually allow CORS — needed for html2canvas PDF export.
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
-      subdomains: 'abcd',
-      crossOrigin: true,
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map);
 
     const group = L.featureGroup();
@@ -113,9 +144,51 @@ export default function AnalyticsGeoMap({ items }) {
           <div
             ref={mapElRef}
             className="geo-map geo-map--analytics"
+            data-pdf-ignore-map="1"
             role="img"
             aria-label="Карта мест проведения опросов"
           />
+
+          {/* Self-contained schematic for PDF export (no tile CDN). Hidden on screen. */}
+          <div className="analytics-geo__schema" hidden data-pdf-schema="1">
+            <svg
+              viewBox="0 0 640 280"
+              width="100%"
+              height="280"
+              role="img"
+              aria-label="Схема расположения геометок"
+            >
+              <rect x="0" y="0" width="640" height="280" fill="#f7f8fa" />
+              <rect
+                x="12"
+                y="12"
+                width="616"
+                height="256"
+                fill="#ffffff"
+                stroke="#d7dbe3"
+                strokeWidth="1"
+              />
+              {schemaPoints.map((p) => (
+                <g key={p.id}>
+                  <circle cx={p.x} cy={p.y} r="8" fill="#2f6fed" />
+                  <text
+                    x={p.x}
+                    y={p.y - 12}
+                    textAnchor="middle"
+                    fontSize="12"
+                    fill="#1f2937"
+                    fontFamily="sans-serif"
+                  >
+                    #{p.sessionNumber}
+                  </text>
+                </g>
+              ))}
+            </svg>
+            <p className="muted analytics-geo__schema-note">
+              Схема взаимного расположения точек (без подложки карты).
+            </p>
+          </div>
+
           <ul className="analytics-geo__list">
             {points.map((p) => (
               <li key={p.id}>
