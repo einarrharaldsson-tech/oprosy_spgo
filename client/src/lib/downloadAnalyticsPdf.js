@@ -32,15 +32,45 @@ async function captureGeoBlock(element) {
   }
 }
 
-function sizeForPage(block, usableWidth, usableHeight) {
-  let drawW = usableWidth;
-  let drawH = (block.height * drawW) / block.width;
-  if (drawH > usableHeight) {
-    const scale = usableHeight / drawH;
-    drawW *= scale;
-    drawH = usableHeight;
+/**
+ * Draw a captured HTML block scaled to page width.
+ * Tall blocks continue on following pages. Returns next Y cursor.
+ */
+function addBlockPaginated(pdf, block, cursorY, { margin, gap, usableWidth, pageHeight }) {
+  const drawW = usableWidth;
+  const drawH = (block.height * drawW) / block.width;
+  const pageContentHeight = pageHeight - margin * 2;
+  const spaceLeft = pageHeight - margin - cursorY;
+
+  if (cursorY > margin && drawH > spaceLeft) {
+    pdf.addPage();
+    cursorY = margin;
   }
-  return { drawW, drawH };
+
+  if (drawH <= pageHeight - margin - cursorY) {
+    pdf.addImage(block.dataUrl, 'PNG', margin, cursorY, drawW, drawH, undefined, 'FAST');
+    return cursorY + drawH + gap;
+  }
+
+  let heightLeft = drawH;
+  let y = cursorY;
+  pdf.addImage(block.dataUrl, 'PNG', margin, y, drawW, drawH, undefined, 'FAST');
+  heightLeft -= pageHeight - margin - cursorY;
+
+  while (heightLeft > 0.5) {
+    y = margin - (drawH - heightLeft);
+    pdf.addPage();
+    pdf.addImage(block.dataUrl, 'PNG', margin, y, drawW, drawH, undefined, 'FAST');
+    heightLeft -= pageContentHeight;
+  }
+
+  const remainder = ((drawH - (pageHeight - margin - cursorY)) % pageContentHeight + pageContentHeight) %
+    pageContentHeight;
+  if (remainder < 0.5) {
+    pdf.addPage();
+    return margin;
+  }
+  return margin + remainder + gap;
 }
 
 export async function downloadAnalyticsPdf(element, filename) {
@@ -49,37 +79,39 @@ export async function downloadAnalyticsPdf(element, filename) {
     element.querySelector('.analytics-report__head');
   const geoBlocks = [...element.querySelectorAll('[data-pdf-block="geo"]')];
   const cards = [...element.querySelectorAll('[data-pdf-block="card"]')];
-  const blocks = [];
-  if (header) blocks.push(await captureBlock(header));
-  for (const geo of geoBlocks) {
-    blocks.push(await captureGeoBlock(geo));
-  }
-  for (const card of cards) {
-    blocks.push(await captureBlock(card));
-  }
-  if (!blocks.length) {
+  const sessionsHead = element.querySelector('[data-pdf-block="sessions-head"]');
+  const sessions = [...element.querySelectorAll('[data-pdf-block="session"]')];
+
+  const jobs = [];
+  if (header) jobs.push({ type: 'normal', el: header });
+  for (const geo of geoBlocks) jobs.push({ type: 'geo', el: geo });
+  for (const card of cards) jobs.push({ type: 'normal', el: card });
+  if (sessionsHead) jobs.push({ type: 'normal', el: sessionsHead });
+  for (const session of sessions) jobs.push({ type: 'normal', el: session });
+
+  if (!jobs.length) {
     throw new Error('Нет блоков для PDF');
   }
 
+  const captured = [];
+  for (const job of jobs) {
+    captured.push(job.type === 'geo' ? await captureGeoBlock(job.el) : await captureBlock(job.el));
+  }
+
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = 12;
   const gap = 5;
-  const usableWidth = pageWidth - margin * 2;
-  const usableHeight = pageHeight - margin * 2;
+  const usableWidth = pdf.internal.pageSize.getWidth() - margin * 2;
 
   let cursorY = margin;
-
-  for (const block of blocks) {
-    const { drawW, drawH } = sizeForPage(block, usableWidth, usableHeight);
-    const remaining = pageHeight - margin - cursorY;
-    if (cursorY > margin && drawH > remaining) {
-      pdf.addPage();
-      cursorY = margin;
-    }
-    pdf.addImage(block.dataUrl, 'PNG', margin, cursorY, drawW, drawH, undefined, 'FAST');
-    cursorY += drawH + gap;
+  for (const block of captured) {
+    cursorY = addBlockPaginated(pdf, block, cursorY, {
+      margin,
+      gap,
+      usableWidth,
+      pageHeight,
+    });
   }
 
   pdf.save(filename);

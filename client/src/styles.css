@@ -974,6 +974,47 @@ a {
   color: var(--brand);
 }
 
+.analytics-sessions {
+  margin-top: 20px;
+}
+
+.analytics-sessions__title {
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--brand);
+}
+
+.analytics-sessions__list {
+  gap: 12px;
+}
+
+.analytics-session__head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 12px;
+  margin-bottom: 8px;
+}
+
+.analytics-session__geo {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+}
+
+.analytics-session__answers {
+  display: grid;
+  gap: 10px;
+}
+
+.analytics-session__q {
+  font-weight: 650;
+}
+
+.analytics-session__a {
+  margin-top: 2px;
+}
+
 .analytics-report {
   background: var(--field-bg);
   border-radius: var(--radius);

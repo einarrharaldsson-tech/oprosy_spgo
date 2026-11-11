@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import AnalyticsGeoMap from './AnalyticsGeoMap';
 import PieChart from './PieChart';
+import { answerText, formatGeoCoords } from '../lib/responseAnswers';
 import { buildQuestionCharts } from '../lib/surveyAnalytics';
 
 function countGeoPoints(items) {
@@ -22,14 +23,15 @@ export default function SurveyAnalytics({ survey, items, onError }) {
     [survey, items]
   );
   const geoCount = useMemo(() => countGeoPoints(items), [items]);
-  const canExport = charts.length > 0 || geoCount > 0;
+  const questions = survey?.questions || [];
+  const canExport = items.length > 0;
 
   const downloadPdf = async () => {
     if (!reportRef.current) return;
     onError?.('');
     setPdfBusy(true);
     try {
-      // Give Leaflet time to finish layout/tiles before canvas capture.
+      // Give Leaflet time to finish layout before canvas capture.
       await new Promise((resolve) => window.setTimeout(resolve, 450));
       const stamp = new Date().toISOString().slice(0, 10);
       const safeTitle = String(survey?.title || 'opros')
@@ -72,7 +74,7 @@ export default function SurveyAnalytics({ survey, items, onError }) {
             onClick={downloadPdf}
             disabled={pdfBusy || !canExport}
           >
-            {pdfBusy ? 'Формирование PDF…' : 'Скачать PDF с диаграммами'}
+            {pdfBusy ? 'Формирование PDF…' : 'Скачать PDF-отчёт'}
           </button>
         )}
       </div>
@@ -96,7 +98,7 @@ export default function SurveyAnalytics({ survey, items, onError }) {
             {!charts.length ? (
               <p className="muted" style={{ gridColumn: '1 / -1' }}>
                 Круговые диаграммы строятся для вопросов с вариантами ответа. Текстовые и адресные
-                поля остаются в CSV.
+                поля остаются в CSV и в разделе «Все проведения» ниже.
               </p>
             ) : (
               charts.map((chart, index) => (
@@ -149,6 +151,48 @@ export default function SurveyAnalytics({ survey, items, onError }) {
                 </article>
               ))
             )}
+          </div>
+
+          <div className="analytics-sessions">
+            <h3 className="analytics-sessions__title" data-pdf-block="sessions-head">
+              Все проведения
+            </h3>
+            <div className="stack analytics-sessions__list">
+              {items.map((item) => {
+                const coords = formatGeoCoords(item.geo);
+                return (
+                  <article
+                    key={item.id}
+                    className="panel analytics-session"
+                    data-pdf-block="session"
+                  >
+                    <div className="analytics-session__head">
+                      <strong>Проведение #{item.sessionNumber}</strong>
+                      <span className="muted">
+                        {item.createdAt
+                          ? new Date(item.createdAt).toLocaleString('ru-RU')
+                          : '—'}
+                      </span>
+                    </div>
+                    {coords && (
+                      <p className="muted analytics-session__geo">
+                        Геометка: {coords}
+                      </p>
+                    )}
+                    <div className="analytics-session__answers">
+                      {questions.map((q) => (
+                        <div key={q.id} className="analytics-session__qa">
+                          <div className="analytics-session__q">{q.text}</div>
+                          <div className="muted analytics-session__a">
+                            {answerText(q, item.answers)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
