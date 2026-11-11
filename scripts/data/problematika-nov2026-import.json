@@ -1,0 +1,1151 @@
+{
+  "title": "Опросник по проблематике — ноябрь 2026",
+  "description": "",
+  "questions": [
+    {
+      "text": "МУНИЦИПАЛИТЕТ. Указывается полевым сотрудником самостоятельно",
+      "answerType": "text",
+      "isRequired": true,
+      "allowMultiple": false,
+      "options": []
+    },
+    {
+      "text": "Пол. Указывается полевым сотрудником самостоятельно",
+      "answerType": "checkbox",
+      "isRequired": true,
+      "allowMultiple": false,
+      "options": [
+        {
+          "text": "Мужской",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Женский",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        }
+      ]
+    },
+    {
+      "text": "Сколько Вам полных лет? (один ответ)",
+      "answerType": "checkbox",
+      "isRequired": true,
+      "allowMultiple": false,
+      "options": [
+        {
+          "text": "18-29 лет",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "30-44 лет",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "45-60 лет",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "61 год и старше",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        }
+      ]
+    },
+    {
+      "text": "Уважите Ваш населенный пункт проживания? (один ответ – открытый вопрос)",
+      "answerType": "address",
+      "isRequired": true,
+      "allowMultiple": false,
+      "options": []
+    },
+    {
+      "text": "Имеете ли Вы постоянную регистрацию в муниципальном образовании? (один ответ)",
+      "answerType": "checkbox",
+      "isRequired": false,
+      "allowMultiple": false,
+      "options": [
+        {
+          "text": "Да, зарегистрирован и проживаю постоянно",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Нет, не зарегистрирован, но проживаю постоянно",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Не проживаю здесь",
+          "jumpAction": "end",
+          "jumpToQuestionIndex": null
+        }
+      ]
+    },
+    {
+      "text": "Вы в целом довольны или не довольны положением дел в Вашем округе? (один ответ) 1 Скорее доволен 2 Скорее не доволен 3 Затрудняюсь ответить",
+      "answerType": "text",
+      "isRequired": true,
+      "allowMultiple": false,
+      "options": []
+    },
+    {
+      "text": "Как Вы оцениваете деятельность главы муниципального образования? (один ответ) 1 Скорее положительно 2 Скорее отрицательно 3 Затрудняюсь ответить",
+      "answerType": "text",
+      "isRequired": true,
+      "allowMultiple": false,
+      "options": []
+    },
+    {
+      "text": "Скажите, пожалуйста, какие проблемы в Вашем округе необходимо решить в первую очередь? (открытый вопрос)",
+      "answerType": "checkbox",
+      "isRequired": true,
+      "allowMultiple": false,
+      "options": [
+        {
+          "text": "Другое (укажите)",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Никаких проблем нет",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Затрудняюсь ответить",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Отказ от ответа",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        }
+      ]
+    },
+    {
+      "text": "Вы удовлетворены или не удовлетворены положением дел в сфере здравоохранения? (один ответ)",
+      "answerType": "checkbox",
+      "isRequired": false,
+      "allowMultiple": false,
+      "options": [
+        {
+          "text": "Скорее удовлетворен",
+          "jumpAction": "jump",
+          "jumpToQuestionIndex": 10
+        },
+        {
+          "text": "Скорее не удовлетворен",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Затрудняюсь ответить",
+          "jumpAction": "jump",
+          "jumpToQuestionIndex": 10
+        }
+      ]
+    },
+    {
+      "text": "Что Вас не устраивает в сфере здравоохранения? (КАРТОЧКА 1 - любое число ответов)",
+      "answerType": "checkbox",
+      "isRequired": false,
+      "allowMultiple": true,
+      "options": [
+        {
+          "text": "Низкое качество услуг в медицинских учреждениях",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Неэтичное отношение к пациентам",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Нехватка врачей и медперсонала",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Большие очереди, долго ждать приема",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Нет возможности записаться к специалисту более 14 дней",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Отказ в приеме, лечении",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Неудобная электронная система записи",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Нет необходимых услуг, процедур, оборудования, препаратов",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Навязывание платных услуг, медикаментов",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Неудобное расположение медицинских учреждений",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Плохое состояние медицинских учреждениях",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Долгое ожидание скорой помощи",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Проблемы с вызовом скорой помощи",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Другое (укажите)",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Затрудняюсь ответить",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        }
+      ]
+    },
+    {
+      "text": "Вы удовлетворены или не удовлетворены положением дел в сфере ЖКХ? (один ответ)",
+      "answerType": "checkbox",
+      "isRequired": false,
+      "allowMultiple": false,
+      "options": [
+        {
+          "text": "Скорее удовлетворен",
+          "jumpAction": "jump",
+          "jumpToQuestionIndex": 12
+        },
+        {
+          "text": "Скорее не удовлетворен",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Затрудняюсь ответить",
+          "jumpAction": "jump",
+          "jumpToQuestionIndex": 12
+        }
+      ]
+    },
+    {
+      "text": "Что Вас не устраивает в сфере ЖКХ? (КАРТОЧКА 3 - любое число ответов)",
+      "answerType": "checkbox",
+      "isRequired": false,
+      "allowMultiple": true,
+      "options": [
+        {
+          "text": "Не устраивает качество холодной воды",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Не устраивает качество горячей воды",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Наличие накипи при использовании бытовых приборов",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Перебои в теплоснабжении",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Перебои в электроснабжении",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Перебои в водоснабжении",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Состояние коммуникаций",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Состояние подъездов",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Состояние кровли",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Отсутствие контакта с УК",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Отсутствие квалифицированных работников ЖКХ",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Высокие тарифы не соответствуют качеству услуг",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Непрозрачная система тарификации",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Проблемы с информированием о тарифах",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Проблемы с платежками",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Проблемы с вывозом мусора",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Другое (укажите)",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Затрудняюсь ответить",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        }
+      ]
+    },
+    {
+      "text": "Вы удовлетворены или не удовлетворены положением дел в сфере общественного транспорта? (один ответ)",
+      "answerType": "checkbox",
+      "isRequired": false,
+      "allowMultiple": false,
+      "options": [
+        {
+          "text": "Скорее удовлетворен",
+          "jumpAction": "jump",
+          "jumpToQuestionIndex": 14
+        },
+        {
+          "text": "Скорее не удовлетворен",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Затрудняюсь ответить",
+          "jumpAction": "jump",
+          "jumpToQuestionIndex": 14
+        }
+      ]
+    },
+    {
+      "text": "Что Вас не устраивает в сфере общественного транспорта? (КАРТОЧКА 4 - любое число ответов)",
+      "answerType": "checkbox",
+      "isRequired": false,
+      "allowMultiple": true,
+      "options": [
+        {
+          "text": "Состояние остановок",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Количество остановок",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "График движения",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Соблюдение графика движения",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Количество общественного транспорта на маршруте",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Техническое состояние общественного транспорта",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Вежливость, внимательность водителя",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Аккуратность вождения",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Удобство оплаты за проезд",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Оплата проезда наличными или на карту водителя, минуя терминал",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Другое (укажите)",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Затрудняюсь ответить",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        }
+      ]
+    },
+    {
+      "text": "Вы удовлетворены или не удовлетворены положением дел в сфере дорожного хозяйства? (один ответ)",
+      "answerType": "checkbox",
+      "isRequired": false,
+      "allowMultiple": false,
+      "options": [
+        {
+          "text": "Скорее удовлетворен",
+          "jumpAction": "jump",
+          "jumpToQuestionIndex": 16
+        },
+        {
+          "text": "Скорее не удовлетворен",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Затрудняюсь ответить",
+          "jumpAction": "jump",
+          "jumpToQuestionIndex": 16
+        }
+      ]
+    },
+    {
+      "text": "Что Вас не устраивает в сфере дорожного хозяйства? (КАРТОЧКА 5 - любое число ответов)",
+      "answerType": "checkbox",
+      "isRequired": false,
+      "allowMultiple": true,
+      "options": [
+        {
+          "text": "Недостаточная освещенность дорог",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Недостаточная освещенность остановок",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Плохая уборка дорог от мусора и снега",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Отсутствие обкашивания обочин дорог",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Плохая дорожная разметка",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Отсутствие пешеходных переходов",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Непродуманная организация движения (знаки, светофоры)",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Плохое качество дорожного покрытия",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Пробки",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Недостаток развязок, эстакад",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Другое (укажите)",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Затрудняюсь ответить",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        }
+      ]
+    },
+    {
+      "text": "Вы удовлетворены или не удовлетворены положением дел в сфере благоустройства? (один ответ)",
+      "answerType": "checkbox",
+      "isRequired": false,
+      "allowMultiple": false,
+      "options": [
+        {
+          "text": "Скорее удовлетворен",
+          "jumpAction": "jump",
+          "jumpToQuestionIndex": 18
+        },
+        {
+          "text": "Скорее не удовлетворен",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Затрудняюсь ответить",
+          "jumpAction": "jump",
+          "jumpToQuestionIndex": 18
+        }
+      ]
+    },
+    {
+      "text": "Что Вас не устраивает в сфере благоустройства? (КАРТОЧКА 6 - любое число ответов)",
+      "answerType": "checkbox",
+      "isRequired": false,
+      "allowMultiple": true,
+      "options": [
+        {
+          "text": "Недостаточное освещение улиц, дворов и зданий",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Недостаточное количество парков, скверов, лесопарков",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Отсутствие благоустроенных пешеходных зон и площадей",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Отсутствие набережной, пляжной зоны, зоны отдыха у воды",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Отсутствие велоинфраструктуры, зон для экстремального и активного отдыха",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Отсутствие детских площадок, воркаут зон",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Озеленение, недостаток клумб",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Плохое плиточное / асфальтовое покрытие",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Состояние тротуаров",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Сломанные элементы благоустройства",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Не ухоженность территории муниципалитета",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Отсутствие лавочек",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Отсутствие урн",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Отсутствие парковки для личного автотранспорта",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Аварийные и сухостойные деревья",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Другое (укажите)",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Затрудняюсь ответить",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        }
+      ]
+    },
+    {
+      "text": "Какими источниками Вы преимущественно пользуетесь при получении информации о положении дел в Вашем муниципалитете (КАРТОЧКА 8 - любое число ответов)",
+      "answerType": "checkbox",
+      "isRequired": true,
+      "allowMultiple": true,
+      "options": [
+        {
+          "text": "Телевидение",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Телеграм-каналы",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Чаты в МАХ",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Сайты Интернет – СМИ",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Сайты органов государственной власти",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Rutube",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Группы ВКонтакте",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Группы в Одноклассниках",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "От друзей, родственников",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Радио",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Печатные СМИ",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Яндекс",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "WhatsApp-чаты",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Другое (укажите)",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Этой информацией не интересуюсь",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Затрудняюсь ответить / отказ от ответа",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        }
+      ]
+    },
+    {
+      "text": "Проводились ли местной администрацией какие -либо мероприятия, встречи с жителями на местах в последнее время? (один ответ)",
+      "answerType": "checkbox",
+      "isRequired": true,
+      "allowMultiple": false,
+      "options": [
+        {
+          "text": "Да, проводились, хорошо информирован об этих мероприятиях",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Что-то слышал про такие мероприятия, но точно не знаю",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Ничего не слышал, не знаю",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Затрудняюсь ответит",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        }
+      ]
+    },
+    {
+      "text": "Как Вы считаете, необходимы ли такие мероприятия? (один ответ)",
+      "answerType": "checkbox",
+      "isRequired": true,
+      "allowMultiple": false,
+      "options": [
+        {
+          "text": "Да, такие мероприятия необходимы",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Нет, так мероприятия не нужны",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Затрудняюсь ответить",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Отказ от ответа",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        }
+      ]
+    },
+    {
+      "text": "Готовы ли Вы сами принимать участие в таких мероприятиях? (один ответ)",
+      "answerType": "checkbox",
+      "isRequired": true,
+      "allowMultiple": false,
+      "options": [
+        {
+          "text": "Да, обязательно буду участвовать",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Да, скорее буду участвовать",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Нет, скорее не буду участвовать",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Нет, точно не буду участвовать",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Затрудняюсь ответить",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Отказ от ответа",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        }
+      ]
+    },
+    {
+      "text": "Знаете ли Вы о таком виде мероприятий как «Выездная Администраци я»? (один ответ)",
+      "answerType": "checkbox",
+      "isRequired": true,
+      "allowMultiple": false,
+      "options": [
+        {
+          "text": "Да, знаю хорошо",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Что-то знаю, но полной информацией не владею",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Нет, ничего не знаю, не слышал",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Затрудняюсь ответить",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        }
+      ]
+    },
+    {
+      "text": "Ваше образование (один ответ)",
+      "answerType": "checkbox",
+      "isRequired": true,
+      "allowMultiple": false,
+      "options": [
+        {
+          "text": "Высшее",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Незаконченное высшее",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Среднее специальное",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Общее среднее",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Неполное среднее и начальное",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Затрудняюсь ответить / Отказ от ответа",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        }
+      ]
+    },
+    {
+      "text": "Как Вы оцениваете уровень вашего материального положения? (один ответ)",
+      "answerType": "checkbox",
+      "isRequired": true,
+      "allowMultiple": false,
+      "options": [
+        {
+          "text": "Не хватает денег даже на еду",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Денег хватает на еду, но покупать одежду и оплачивать ЖКУ затруднительно",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Денег хватает на еду и одежду, но не можем позволить себе покупку товаров длительного пользования",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Денег хватает на еду, одежду и товары длительного пользования, но не можем позволить себе п окупку автомобиля, дачи, квартиры",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Материальных затруднений нет, можем купить, все, что захотим",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Затрудняюсь ответить/отказ от ответа",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        }
+      ]
+    },
+    {
+      "text": "Ваше основное занятие, которое является основным источником Ваших доходов? (один ответ)",
+      "answerType": "checkbox",
+      "isRequired": false,
+      "allowMultiple": false,
+      "options": [
+        {
+          "text": "Руководитель",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Государственный и муниципальный служащий",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Рабочий",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Специалист, офисный работник",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Военнослужащий, сотрудник правоохранительных органов",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Предприниматель",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Фермер (с\\х работник)",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Самозанятое население",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Работающий пенсионер",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Учащийся, студент",
+          "jumpAction": "jump",
+          "jumpToQuestionIndex": 27
+        },
+        {
+          "text": "Домохозяйка",
+          "jumpAction": "end",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Неработающий пенсионер",
+          "jumpAction": "end",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Безработный",
+          "jumpAction": "end",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Другое (укажите)",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Затрудняюсь ответить/отказ от ответа",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        }
+      ]
+    },
+    {
+      "text": "В какой сфере Вы работаете? (один ответ)",
+      "answerType": "checkbox",
+      "isRequired": false,
+      "allowMultiple": false,
+      "options": [
+        {
+          "text": "Торговля",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Образование",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Наука",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Здравоохранение",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Культура",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Строительство",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Промышленное производство",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Транспорт (автомобильный, железнодорожный, авиационный)",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "ЖКХ",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Государственное и муниципальное управление",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Правоохранительные органы, армия, силовые структуры",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Реклама, СМИ, информационные технологии",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Банки, финансы",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Легкая, пищевая промышленность",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Сфера услуг",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Иное",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Затрудняюсь ответить/отказ от ответа",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        }
+      ]
+    },
+    {
+      "text": "Где Вы работаете/учитесь? (один ответ)",
+      "answerType": "checkbox",
+      "isRequired": true,
+      "allowMultiple": false,
+      "options": [
+        {
+          "text": "В своем муниципальном образовании",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "В другом муниципальном образовании Подмосковья",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "В Москве",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Другое (укажите)",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        },
+        {
+          "text": "Затрудняюсь ответить/отказ от ответа",
+          "jumpAction": "none",
+          "jumpToQuestionIndex": null
+        }
+      ]
+    }
+  ]
+}
