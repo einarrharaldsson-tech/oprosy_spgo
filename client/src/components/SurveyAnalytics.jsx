@@ -1,6 +1,17 @@
 import { useMemo, useRef, useState } from 'react';
+import AnalyticsGeoMap from './AnalyticsGeoMap';
 import PieChart from './PieChart';
 import { buildQuestionCharts } from '../lib/surveyAnalytics';
+
+function countGeoPoints(items) {
+  let n = 0;
+  for (const item of items || []) {
+    const lat = Number(item?.geo?.lat);
+    const lng = Number(item?.geo?.lng);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) n += 1;
+  }
+  return n;
+}
 
 export default function SurveyAnalytics({ survey, items, onError }) {
   const reportRef = useRef(null);
@@ -10,12 +21,16 @@ export default function SurveyAnalytics({ survey, items, onError }) {
     () => buildQuestionCharts(survey?.questions || [], items),
     [survey, items]
   );
+  const geoCount = useMemo(() => countGeoPoints(items), [items]);
+  const canExport = charts.length > 0 || geoCount > 0;
 
   const downloadPdf = async () => {
     if (!reportRef.current) return;
     onError?.('');
     setPdfBusy(true);
     try {
+      // Give Leaflet time to finish layout/tiles before canvas capture.
+      await new Promise((resolve) => window.setTimeout(resolve, 450));
       const stamp = new Date().toISOString().slice(0, 10);
       const safeTitle = String(survey?.title || 'opros')
         .replace(/[<>:"/\\|?*]+/g, ' ')
@@ -55,33 +70,36 @@ export default function SurveyAnalytics({ survey, items, onError }) {
             className="btn btn-primary"
             style={{ minHeight: 36, padding: '0 12px' }}
             onClick={downloadPdf}
-            disabled={pdfBusy || !charts.length}
+            disabled={pdfBusy || !canExport}
           >
             {pdfBusy ? 'Формирование PDF…' : 'Скачать PDF с диаграммами'}
           </button>
         )}
       </div>
 
-      {open &&
-        (!charts.length ? (
-          <p className="muted">
-            Круговые диаграммы строятся для вопросов с вариантами ответа. Текстовые и адресные поля
-            остаются в CSV.
-          </p>
-        ) : (
-          <div ref={reportRef} className="analytics-report">
-            <div className="analytics-report__head" data-pdf-block="head">
-              <div className="analytics-report__kicker">Отчёт по опросу</div>
-              <h3 className="analytics-report__survey">{survey?.title || 'Опрос'}</h3>
-              <p className="muted">
-                Проведений: {items.length}
-                {' · '}
-                {new Date().toLocaleString('ru-RU')}
-              </p>
-            </div>
+      {open && (
+        <div ref={reportRef} className="analytics-report">
+          <div className="analytics-report__head" data-pdf-block="head">
+            <div className="analytics-report__kicker">Отчёт по опросу</div>
+            <h3 className="analytics-report__survey">{survey?.title || 'Опрос'}</h3>
+            <p className="muted">
+              Проведений: {items.length}
+              {geoCount > 0 ? ` · с геометкой: ${geoCount}` : ''}
+              {' · '}
+              {new Date().toLocaleString('ru-RU')}
+            </p>
+          </div>
 
-            <div className="analytics-grid">
-              {charts.map((chart, index) => (
+          <div className="analytics-grid">
+            <AnalyticsGeoMap items={items} />
+
+            {!charts.length ? (
+              <p className="muted" style={{ gridColumn: '1 / -1' }}>
+                Круговые диаграммы строятся для вопросов с вариантами ответа. Текстовые и адресные
+                поля остаются в CSV.
+              </p>
+            ) : (
+              charts.map((chart, index) => (
                 <article key={chart.questionId} className="panel analytics-card" data-pdf-block="card">
                   <h4 className="analytics-card__question">
                     {index + 1}. {chart.questionText}
@@ -129,10 +147,11 @@ export default function SurveyAnalytics({ survey, items, onError }) {
                     </div>
                   )}
                 </article>
-              ))}
-            </div>
+              ))
+            )}
           </div>
-        ))}
+        </div>
+      )}
     </section>
   );
 }

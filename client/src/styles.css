@@ -854,6 +854,24 @@ a {
   touch-action: manipulation;
 }
 
+.geo-map--analytics {
+  height: 300px;
+  border: 1px solid var(--line);
+}
+
+.analytics-geo__list {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  font-size: 0.9rem;
+}
+
+.analytics-geo__list li {
+  margin: 0;
+}
+
 .conduct-geo-picker {
   margin-top: 14px;
   padding: 12px 14px;

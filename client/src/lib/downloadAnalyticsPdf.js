@@ -29,10 +29,16 @@ function sizeForPage(block, usableWidth, usableHeight) {
 }
 
 export async function downloadAnalyticsPdf(element, filename) {
-  const header = element.querySelector('[data-pdf-block="head"]') || element.querySelector('.analytics-report__head');
-  const cards = [...element.querySelectorAll('[data-pdf-block="card"], .analytics-card')];
+  const header =
+    element.querySelector('[data-pdf-block="head"]') ||
+    element.querySelector('.analytics-report__head');
+  const geoBlocks = [...element.querySelectorAll('[data-pdf-block="geo"]')];
+  const cards = [...element.querySelectorAll('[data-pdf-block="card"]')];
   const blocks = [];
   if (header) blocks.push(await captureBlock(header));
+  for (const geo of geoBlocks) {
+    blocks.push(await captureBlock(geo));
+  }
   for (const card of cards) {
     blocks.push(await captureBlock(card));
   }
