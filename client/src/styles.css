@@ -911,6 +911,26 @@ a {
   margin-bottom: 12px;
 }
 
+.analytics__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.analytics__chevron {
+  display: inline-block;
+  width: 1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
 .analytics__title {
   margin: 0;
   font-size: 1.05rem;
