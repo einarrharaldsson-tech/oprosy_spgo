@@ -14,6 +14,7 @@ export function requestConductGeo(options = {}) {
           lng: pos.coords.longitude,
           accuracy: pos.coords.accuracy,
           capturedAt: new Date().toISOString(),
+          source: 'gps',
         });
       },
       () => resolve(null),
@@ -29,6 +30,9 @@ export function requestConductGeo(options = {}) {
 export function formatGeoStatus(geo, status) {
   if (status === 'pending') return 'Определение местоположения…';
   if (geo?.lat != null && geo?.lng != null) {
+    if (geo.source === 'manual') {
+      return 'Местоположение указано вручную';
+    }
     const acc =
       geo.accuracy != null && Number.isFinite(Number(geo.accuracy))
         ? ` (±${Math.round(Number(geo.accuracy))} м)`
@@ -36,7 +40,7 @@ export function formatGeoStatus(geo, status) {
     return `Местоположение получено${acc}`;
   }
   if (status === 'denied' || status === 'unavailable') {
-    return 'Нет доступа к геолокации — проведение можно продолжить';
+    return 'Нет доступа к геолокации — укажите точку на карте или продолжите без неё';
   }
   return '';
 }

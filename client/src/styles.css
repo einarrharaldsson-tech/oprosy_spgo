@@ -848,6 +848,47 @@ a {
   font: inherit;
 }
 
+.geo-map--conduct {
+  height: 220px;
+  border: 1px solid var(--line);
+  touch-action: manipulation;
+}
+
+.conduct-geo-picker {
+  margin-top: 12px;
+}
+
+.conduct-geo-picker__toggle {
+  font-size: 0.95rem;
+}
+
+.conduct-geo-picker__panel {
+  margin-top: 10px;
+}
+
+.conduct-geo-picker__hint {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+}
+
+.conduct-geo-picker__coords {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+}
+
+.conduct-geo-picker__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.conduct-geo-picker__actions .btn {
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: 0.9rem;
+}
+
 .analytics {
   margin: 4px 0 20px;
 }
