@@ -34,7 +34,8 @@ export default function ConductGeoPicker({
   onClear,
   onRequestGps,
 }) {
-  const [open, setOpen] = useState(false);
+  // Open by default so interviewers immediately see where to place the pin.
+  const [open, setOpen] = useState(true);
   const mapElRef = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
@@ -163,19 +164,23 @@ export default function ConductGeoPicker({
 
   return (
     <div className="conduct-geo-picker">
-      <button
-        type="button"
-        className="btn btn-ghost btn-block conduct-geo-picker__toggle"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-      >
-        {open ? 'Скрыть карту' : 'Указать на карте'}
-      </button>
+      <div className="conduct-geo-picker__header">
+        <strong>Геометка</strong>
+        <button
+          type="button"
+          className="btn btn-ghost conduct-geo-picker__toggle"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+        >
+          {open ? 'Скрыть карту' : 'Показать карту'}
+        </button>
+      </div>
 
       {open && (
         <div className="conduct-geo-picker__panel">
           <p className="muted conduct-geo-picker__hint">
-            Нажмите на карту или перетащите маркер, чтобы поставить геометку вручную.
+            Нажмите на карту или перетащите маркер, чтобы поставить точку вручную.
+            GPS подставляется автоматически — метку можно поправить.
           </p>
           <div
             ref={mapElRef}

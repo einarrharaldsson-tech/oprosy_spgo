@@ -855,11 +855,24 @@ a {
 }
 
 .conduct-geo-picker {
-  margin-top: 12px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--brand) 6%, var(--mix-light));
+  border: 1px solid var(--line);
+}
+
+.conduct-geo-picker__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .conduct-geo-picker__toggle {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
+  min-height: 36px;
+  padding: 0 12px;
 }
 
 .conduct-geo-picker__panel {
