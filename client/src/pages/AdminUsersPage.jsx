@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import { useAuth } from '../auth';
 
 const ROLES = [
   { value: 'admin', label: 'Администратор' },
@@ -15,6 +16,7 @@ const emptyForm = {
 };
 
 export default function AdminUsersPage() {
+  const { user: me } = useAuth();
   const [users, setUsers] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
@@ -87,6 +89,30 @@ export default function AdminUsersPage() {
     }
   };
 
+  const removeUser = async (u) => {
+    const label = u.fullName ? `${u.fullName} (${u.login})` : u.login;
+    const okConfirm = window.confirm(
+      `Удалить пользователя «${label}»?\n\n` +
+        `Если у него были проведения опросов, в истории они останутся за администратором.`
+    );
+    if (!okConfirm) return;
+    setError('');
+    setOk('');
+    try {
+      const result = await api(`/users/${u.id}`, { method: 'DELETE' });
+      if (editId === u.id) setEditId(null);
+      const moved = Number(result?.responsesReassigned || 0);
+      setOk(
+        moved > 0
+          ? `Пользователь удалён. Проведений переназначено администратору: ${moved}.`
+          : 'Пользователь удалён.'
+      );
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   if (loading) return <div className="loading">Загрузка…</div>;
 
   return (
@@ -94,7 +120,8 @@ export default function AdminUsersPage() {
       <h1 className="page-title">Пользователи</h1>
       <p className="page-sub">
         Администратор — пользователи и конструктор. Редактор — конструктор и проведение.
-        Пользователь — только проведение опросов с доступом.
+        Пользователь — только проведение опросов с доступом. При удалении пользователя его
+        проведения в истории остаются за администратором.
       </p>
 
       {error && <div className="alert" style={{ marginBottom: 12 }}>{error}</div>}
@@ -215,9 +242,20 @@ export default function AdminUsersPage() {
                     <td>{ROLES.find((r) => r.value === u.role)?.label || u.role}</td>
                     <td>{u.isActive ? 'Активен' : 'Отключён'}</td>
                     <td>
-                      <button type="button" className="btn btn-ghost" onClick={() => startEdit(u)}>
-                        Изменить
-                      </button>
+                      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                        <button type="button" className="btn btn-ghost" onClick={() => startEdit(u)}>
+                          Изменить
+                        </button>
+                        {me?.id !== u.id && (
+                          <button
+                            type="button"
+                            className="btn btn-danger"
+                            onClick={() => removeUser(u)}
+                          >
+                            Удалить
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </>
                 )}
