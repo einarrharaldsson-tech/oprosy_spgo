@@ -14,6 +14,7 @@ export function requestConductGeo(options = {}) {
           lng: pos.coords.longitude,
           accuracy: pos.coords.accuracy,
           capturedAt: new Date().toISOString(),
+          source: 'gps',
         });
       },
       () => resolve(null),
@@ -36,7 +37,7 @@ export function formatGeoStatus(geo, status) {
     return `Местоположение получено${acc}`;
   }
   if (status === 'denied' || status === 'unavailable') {
-    return 'Нет доступа к геолокации — проведение можно продолжить';
+    return 'Нет доступа к геолокации — укажите точку на карте или продолжите без неё';
   }
   return '';
 }

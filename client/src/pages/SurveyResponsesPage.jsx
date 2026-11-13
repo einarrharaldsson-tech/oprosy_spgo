@@ -4,16 +4,7 @@ import { api, downloadAuthenticated } from '../api';
 import ResponseAudio from '../components/ResponseAudio';
 import ResponseGeoMap from '../components/ResponseGeoMap';
 import SurveyAnalytics from '../components/SurveyAnalytics';
-import { formatOptionAnswer } from '../lib/options';
-
-function answerText(q, itemAnswers) {
-  const ans = itemAnswers.filter((a) => a.questionId === q.id);
-  if (q.answerType === 'text' || q.answerType === 'address') return ans[0]?.textValue || '—';
-  const texts = ans
-    .map((a) => formatOptionAnswer(a.optionText, a.textValue))
-    .filter(Boolean);
-  return texts.length ? texts.join(', ') : '—';
-}
+import { answerText } from '../lib/responseAnswers';
 
 export default function SurveyResponsesPage() {
   const { id } = useParams();
@@ -22,7 +13,6 @@ export default function SurveyResponsesPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [openIds, setOpenIds] = useState(() => new Set());
-  const [analyticsOpen, setAnalyticsOpen] = useState(true);
   const [csvBusy, setCsvBusy] = useState(false);
 
   useEffect(() => {
@@ -37,7 +27,6 @@ export default function SurveyResponsesPage() {
         setSurvey(s);
         setItems(r.items || []);
         setOpenIds(new Set());
-        setAnalyticsOpen(true);
       } catch (err) {
         if (alive) setError(err.message);
       } finally {
@@ -50,8 +39,8 @@ export default function SurveyResponsesPage() {
   }, [id]);
 
   const allOpen = useMemo(
-    () => items.length > 0 && analyticsOpen && openIds.size === items.length,
-    [items, openIds, analyticsOpen]
+    () => items.length > 0 && openIds.size === items.length,
+    [items, openIds]
   );
 
   const toggleOne = (itemId) => {
@@ -63,14 +52,8 @@ export default function SurveyResponsesPage() {
     });
   };
 
-  const expandAll = () => {
-    setOpenIds(new Set(items.map((i) => i.id)));
-    setAnalyticsOpen(true);
-  };
-  const collapseAll = () => {
-    setOpenIds(new Set());
-    setAnalyticsOpen(false);
-  };
+  const expandAll = () => setOpenIds(new Set(items.map((i) => i.id)));
+  const collapseAll = () => setOpenIds(new Set());
 
   const downloadCsv = async () => {
     setError('');
@@ -124,13 +107,7 @@ export default function SurveyResponsesPage() {
             </button>
           </div>
 
-          <SurveyAnalytics
-            survey={survey}
-            items={items}
-            onError={setError}
-            open={analyticsOpen}
-            onOpenChange={setAnalyticsOpen}
-          />
+          <SurveyAnalytics survey={survey} items={items} onError={setError} />
 
           <h2 className="analytics__title" style={{ marginTop: 8 }}>Проведения</h2>
 

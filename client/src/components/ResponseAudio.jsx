@@ -15,19 +15,8 @@ function formatDuration(sec) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-function extFromMime(mime) {
-  if (!mime) return 'webm';
-  if (mime.includes('ogg')) return 'ogg';
-  if (mime.includes('mpeg') || mime.includes('mp3')) return 'mp3';
-  if (mime.includes('mp4') || mime.includes('m4a')) return 'm4a';
-  if (mime.includes('wav')) return 'wav';
-  if (mime.includes('webm')) return 'webm';
-  return 'webm';
-}
-
 export default function ResponseAudio({ surveyId, responseId, audioDurationSec, audioSize }) {
   const [src, setSrc] = useState('');
-  const [mime, setMime] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [transcribeBusy, setTranscribeBusy] = useState(false);
@@ -48,7 +37,6 @@ export default function ResponseAudio({ surveyId, responseId, audioDurationSec, 
         if (!res.ok) throw new Error('Не удалось загрузить запись');
         const blob = await res.blob();
         if (!alive) return;
-        setMime(blob.type || res.headers.get('Content-Type') || '');
         objectUrl = URL.createObjectURL(blob);
         setSrc(objectUrl);
       } catch (err) {
@@ -93,7 +81,7 @@ export default function ResponseAudio({ surveyId, responseId, audioDurationSec, 
 
       const blob = await res.blob();
       const cd = res.headers.get('Content-Disposition') || '';
-      const m = /filename\*=UTF-8''([^;]+)|filename="([^"]+)"/i.exec(cd);
+      const m = /filename\\*=UTF-8''([^;]+)|filename=\"([^\"]+)\"/i.exec(cd);
       const filename = m
         ? decodeURIComponent(m[1] || m[2])
         : `transcript_${surveyId}_${responseId}.doc`;
@@ -113,15 +101,6 @@ export default function ResponseAudio({ surveyId, responseId, audioDurationSec, 
     }
   };
 
-  const downloadAudio = () => {
-    const a = document.createElement('a');
-    a.href = src;
-    a.download = `survey_${surveyId}_response_${responseId}.${extFromMime(mime)}`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  };
-
   return (
     <div className="audio-block">
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
@@ -132,33 +111,22 @@ export default function ResponseAudio({ surveyId, responseId, audioDurationSec, 
         </span>
       </div>
       <audio controls preload="metadata" src={src} className="audio-player" />
-      <div className="row" style={{ marginTop: 10, gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div className="stack" style={{ marginTop: 10 }}>
         <button
           type="button"
           className="btn btn-accent"
-          style={{ minHeight: 36, padding: '0 12px', width: 'fit-content' }}
-          onClick={downloadAudio}
-        >
-          Скачать аудио
-        </button>
-        <button
-          type="button"
-          className="btn btn-primary"
           style={{ minHeight: 36, padding: '0 12px', width: 'fit-content' }}
           onClick={downloadTranscriptionDoc}
           disabled={transcribeBusy}
         >
           {transcribeBusy ? 'Формирование DOC…' : 'Расшифровать и скачать DOC'}
         </button>
+        {transcribeError && (
+          <p className="alert" style={{ margin: 0 }}>
+            {transcribeError}
+          </p>
+        )}
       </div>
-      <p className="muted" style={{ margin: '6px 0 0', fontSize: '0.8rem', lineHeight: 1.35 }}>
-        Речевая аналитика работает в тестовом режиме. Возможны ошибки.
-      </p>
-      {transcribeError && (
-        <p className="alert" style={{ marginTop: 8 }}>
-          {transcribeError}
-        </p>
-      )}
     </div>
   );
 }

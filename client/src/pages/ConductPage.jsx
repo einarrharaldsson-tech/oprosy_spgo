@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import AddressInput from '../components/AddressInput';
+import ConductGeoPicker from '../components/ConductGeoPicker';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import { buildReachableQuestionIds, resolveJumpFromAnswer } from '../lib/jumpLogic';
 import { syncAllPendingConductSessions, syncPendingConductSession } from '../lib/offlineConductSync';
@@ -344,6 +345,28 @@ export default function ConductPage() {
     setGeo(null);
     setGeoStatus(navigator.geolocation ? 'denied' : 'unavailable');
     return null;
+  };
+
+  const handleManualGeoChange = (next) => {
+    setGeo(next);
+    setGeoStatus('ok');
+    setError('');
+  };
+
+  const handleClearGeo = () => {
+    setGeo(null);
+    setGeoStatus('idle');
+  };
+
+  const handleRequestGpsAgain = async () => {
+    setGeoStatus('pending');
+    const next = await requestConductGeo();
+    if (next) {
+      setGeo(next);
+      setGeoStatus('ok');
+      return;
+    }
+    setGeoStatus(navigator.geolocation ? 'denied' : 'unavailable');
   };
 
   const beginSession = async () => {
@@ -797,6 +820,14 @@ export default function ConductPage() {
             </div>
           )}
         </div>
+
+        <ConductGeoPicker
+          geo={geo}
+          geoStatus={geoStatus}
+          onChange={handleManualGeoChange}
+          onClear={handleClearGeo}
+          onRequestGps={handleRequestGpsAgain}
+        />
 
         {!sessionActive && (
           <>

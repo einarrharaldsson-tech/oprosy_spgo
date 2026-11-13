@@ -19,6 +19,7 @@ import {
 } from '../services/surveys.js';
 import { csvWithBom, safeFilename, toCsv } from '../services/csv.js';
 import {
+  relaxRequiredForSkippedQuestions,
   validateJumpConfiguration,
 } from '../services/jumpLogic.js';
 import { formatOptionAnswer, isOtherOptionText } from '../services/optionHelpers.js';
@@ -179,6 +180,7 @@ router.post('/import/commit', requireRoles('admin'), async (req, res) => {
     if (!title || !String(title).trim()) {
       return res.status(400).json({ error: 'Укажите название опроса' });
     }
+    relaxRequiredForSkippedQuestions(questions);
     const errMsg = validateImportQuestions(questions);
     if (errMsg) {
       return res.status(400).json({ error: errMsg });
