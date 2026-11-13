@@ -8,6 +8,7 @@ import authRoutes from './routes/auth.js';
 import usersRoutes from './routes/users.js';
 import surveysRoutes from './routes/surveys.js';
 import dadataRoutes from './routes/dadata.js';
+import osmTilesRoutes from './routes/osmTiles.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -31,6 +32,7 @@ apiRouter.use('/auth', authRoutes);
 apiRouter.use('/users', usersRoutes);
 apiRouter.use('/surveys', surveysRoutes);
 apiRouter.use('/dadata', dadataRoutes);
+apiRouter.use('/osm-tiles', osmTilesRoutes);
 
 app.use(`${base}/api`, apiRouter);
 

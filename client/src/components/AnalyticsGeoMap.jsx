@@ -68,8 +68,8 @@ function projectPoints(points, width, height, pad = 28) {
 
 /**
  * Consolidated map of all response geotags for the analytics report / PDF.
- * Screen: OpenStreetMap (same as the rest of the app).
- * PDF: self-contained SVG schema — no third-party tile services.
+ * Screen and PDF both use OpenStreetMap. The hidden SVG is only a fallback
+ * when the tile basemap cannot be drawn.
  */
 export default function AnalyticsGeoMap({ items }) {
   const mapElRef = useRef(null);
@@ -144,7 +144,10 @@ export default function AnalyticsGeoMap({ items }) {
           <div
             ref={mapElRef}
             className="geo-map geo-map--analytics"
-            data-pdf-ignore-map="1"
+            data-pdf-map="1"
+            data-points={JSON.stringify(
+              points.map((p) => ({ n: p.sessionNumber, lat: p.lat, lng: p.lng }))
+            )}
             role="img"
             aria-label="Карта мест проведения опросов"
           />

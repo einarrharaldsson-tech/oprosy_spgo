@@ -17,16 +17,48 @@ async function captureBlock(element) {
   };
 }
 
-/** For geo blocks: hide Leaflet/OSM tiles and show the self-contained SVG schema. */
+/** Capture the geo block with an OpenStreetMap basemap. Fall back to the SVG schema. */
 async function captureGeoBlock(element) {
-  const map = element.querySelector('[data-pdf-ignore-map]');
+  const map = element.querySelector('[data-pdf-map]');
   const schema = element.querySelector('[data-pdf-schema]');
   const prevHidden = schema ? schema.hidden : null;
+  let overlay = null;
+  let points = [];
+  try {
+    points = JSON.parse(map?.getAttribute('data-points') || '[]');
+  } catch {
+    points = [];
+  }
+
+  let useSchema = !map || !points.length;
+  if (!useSchema) {
+    try {
+      const { renderOsmBasemap } = await import('./osmBasemap.js');
+      const cssWidth = map.clientWidth || 640;
+      const cssHeight = map.clientHeight || 300;
+      const dataUrl = await renderOsmBasemap(points, cssWidth, cssHeight);
+      overlay = document.createElement('img');
+      overlay.src = dataUrl;
+      overlay.alt = 'Карта мест проведения';
+      overlay.className = 'geo-map geo-map--analytics';
+      overlay.style.height = `${cssHeight}px`;
+      overlay.style.objectFit = 'cover';
+      map.insertAdjacentElement('afterend', overlay);
+      if (overlay.decode) await overlay.decode();
+      if (schema) schema.hidden = true;
+    } catch {
+      overlay?.remove();
+      overlay = null;
+      useSchema = true;
+    }
+  }
+
   if (map) map.setAttribute('data-html2canvas-ignore', 'true');
-  if (schema) schema.hidden = false;
+  if (useSchema && schema) schema.hidden = false;
   try {
     return await captureBlock(element);
   } finally {
+    overlay?.remove();
     if (map) map.removeAttribute('data-html2canvas-ignore');
     if (schema && prevHidden != null) schema.hidden = prevHidden;
   }
