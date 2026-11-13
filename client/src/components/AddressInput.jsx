@@ -7,6 +7,7 @@ import { api } from '../api';
 export default function AddressInput({
   value,
   onChange,
+  onPick,
   required,
   disabled,
   placeholder = 'Начните вводить адрес',
@@ -19,8 +20,13 @@ export default function AddressInput({
   const [highlight, setHighlight] = useState(-1);
   const [hint, setHint] = useState('');
   const seqRef = useRef(0);
+  const skipSuggestOnceRef = useRef(false);
 
   useEffect(() => {
+    if (skipSuggestOnceRef.current) {
+      skipSuggestOnceRef.current = false;
+      return undefined;
+    }
     if (disabled) {
       setSuggestions([]);
       setOpen(false);
@@ -71,10 +77,14 @@ export default function AddressInput({
   }, []);
 
   const pick = (item) => {
-    onChange(item.value || item.unrestrictedValue || '');
+    const label = item.value || item.unrestrictedValue || '';
+    skipSuggestOnceRef.current = true;
     setSuggestions([]);
     setOpen(false);
     setHighlight(-1);
+    setLoading(false);
+    onPick?.(item);
+    onChange(label);
   };
 
   const onKeyDown = (e) => {
