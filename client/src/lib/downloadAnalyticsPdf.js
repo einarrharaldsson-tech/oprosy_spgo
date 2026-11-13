@@ -1,5 +1,29 @@
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import regularUrl from '../assets/fonts/Manrope-Regular.ttf?url';
+import semiboldUrl from '../assets/fonts/Manrope-SemiBold.ttf?url';
+import { readSessionsFromReport, writeSessions } from './pdfSessionText.js';
+
+async function fontBase64(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Не удалось загрузить шрифт отчёта');
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  let binary = '';
+  const step = 0x8000;
+  for (let i = 0; i < bytes.length; i += step) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + step));
+  }
+  return btoa(binary);
+}
+
+async function registerReportFonts(pdf) {
+  const [regular, semibold] = await Promise.all([fontBase64(regularUrl), fontBase64(semiboldUrl)]);
+  pdf.addFileToVFS('Manrope-Regular.ttf', regular);
+  pdf.addFont('Manrope-Regular.ttf', 'Manrope', 'normal');
+  pdf.addFileToVFS('Manrope-SemiBold.ttf', semibold);
+  pdf.addFont('Manrope-SemiBold.ttf', 'Manrope', 'bold');
+  pdf.setFont('Manrope', 'normal');
+}
 
 const CAPTURE_OPTIONS = {
   scale: 2,
@@ -111,17 +135,14 @@ export async function downloadAnalyticsPdf(element, filename) {
     element.querySelector('.analytics-report__head');
   const geoBlocks = [...element.querySelectorAll('[data-pdf-block="geo"]')];
   const cards = [...element.querySelectorAll('[data-pdf-block="card"]')];
-  const sessionsHead = element.querySelector('[data-pdf-block="sessions-head"]');
-  const sessions = [...element.querySelectorAll('[data-pdf-block="session"]')];
+  const sessionModel = readSessionsFromReport(element);
 
   const jobs = [];
   if (header) jobs.push({ type: 'normal', el: header });
   for (const geo of geoBlocks) jobs.push({ type: 'geo', el: geo });
   for (const card of cards) jobs.push({ type: 'normal', el: card });
-  if (sessionsHead) jobs.push({ type: 'normal', el: sessionsHead });
-  for (const session of sessions) jobs.push({ type: 'normal', el: session });
 
-  if (!jobs.length) {
+  if (!jobs.length && !sessionModel.sessions.length) {
     throw new Error('Нет блоков для PDF');
   }
 
@@ -131,6 +152,7 @@ export async function downloadAnalyticsPdf(element, filename) {
   }
 
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  await registerReportFonts(pdf);
   const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = 12;
   const gap = 5;
@@ -145,6 +167,8 @@ export async function downloadAnalyticsPdf(element, filename) {
       pageHeight,
     });
   }
+
+  writeSessions(pdf, sessionModel, cursorY, { margin, pageHeight, usableWidth });
 
   pdf.save(filename);
 }
