@@ -1,18 +1,42 @@
 import { useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import PieChart from './PieChart';
+import ResponseGeoMap from './ResponseGeoMap';
 import { buildQuestionCharts } from '../lib/surveyAnalytics';
 
-export default function SurveyAnalytics({ survey, items, onError }) {
+export default function SurveyAnalytics({ survey, items, onError, open = true, onOpenChange }) {
   const reportRef = useRef(null);
   const [pdfBusy, setPdfBusy] = useState(false);
   const charts = useMemo(
     () => buildQuestionCharts(survey?.questions || [], items),
     [survey, items]
   );
+  const geoPoints = useMemo(
+    () =>
+      (items || [])
+        .filter(
+          (item) =>
+            item?.geo &&
+            Number.isFinite(Number(item.geo.lat)) &&
+            Number.isFinite(Number(item.geo.lng))
+        )
+        .map((item) => ({
+          id: item.id,
+          lat: Number(item.geo.lat),
+          lng: Number(item.geo.lng),
+          accuracy: item.geo.accuracy,
+          label: `Проведение #${item.sessionNumber ?? item.id}`,
+        })),
+    [items]
+  );
+  const hasReport = charts.length > 0 || geoPoints.length > 0;
 
   const downloadPdf = async () => {
-    if (!reportRef.current) return;
     onError?.('');
+    if (!open) {
+      flushSync(() => onOpenChange?.(true));
+    }
+    if (!reportRef.current) return;
     setPdfBusy(true);
     try {
       const stamp = new Date().toISOString().slice(0, 10);
@@ -37,25 +61,40 @@ export default function SurveyAnalytics({ survey, items, onError }) {
   return (
     <section className="analytics">
       <div className="row analytics__toolbar">
-        <h2 className="analytics__title">Аналитика</h2>
+        <h2 className="analytics__title">
+          <button
+            type="button"
+            className="analytics-toggle"
+            aria-expanded={open}
+            aria-controls="survey-analytics-panel"
+            onClick={() => onOpenChange?.(!open)}
+          >
+            <span className="response-card-chevron" aria-hidden>
+              {open ? '▼' : '▶'}
+            </span>
+            Аналитика
+          </button>
+        </h2>
         <button
           type="button"
           className="btn btn-primary"
           style={{ minHeight: 36, padding: '0 12px' }}
           onClick={downloadPdf}
-          disabled={pdfBusy || !charts.length}
+          disabled={pdfBusy || !hasReport}
         >
           {pdfBusy ? 'Формирование PDF…' : 'Скачать PDF с диаграммами'}
         </button>
       </div>
 
-      {!charts.length ? (
-        <p className="muted">
+      {open && !hasReport && (
+        <p id="survey-analytics-panel" className="muted">
           Круговые диаграммы строятся для вопросов с вариантами ответа. Текстовые и адресные поля
           остаются в CSV.
         </p>
-      ) : (
-        <div ref={reportRef} className="analytics-report">
+      )}
+
+      {open && hasReport && (
+        <div id="survey-analytics-panel" ref={reportRef} className="analytics-report">
           <div className="analytics-report__head" data-pdf-block="head">
             <div className="analytics-report__kicker">Отчёт по опросу</div>
             <h3 className="analytics-report__survey">{survey?.title || 'Опрос'}</h3>
@@ -65,6 +104,19 @@ export default function SurveyAnalytics({ survey, items, onError }) {
               {new Date().toLocaleString('ru-RU')}
             </p>
           </div>
+
+          {geoPoints.length > 0 && (
+            <div className="analytics-geo" data-pdf-block="card">
+              <ResponseGeoMap points={geoPoints} title="Геометки проведений" />
+            </div>
+          )}
+
+          {!charts.length && (
+            <p className="muted">
+              Круговые диаграммы строятся для вопросов с вариантами ответа. Текстовые и адресные поля
+              остаются в CSV.
+            </p>
+          )}
 
           <div className="analytics-grid">
             {charts.map((chart, index) => (

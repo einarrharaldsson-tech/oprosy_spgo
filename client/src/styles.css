@@ -864,6 +864,31 @@ a {
   color: var(--brand);
 }
 
+.analytics-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 2px 4px 2px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 8px;
+}
+
+.analytics-toggle:hover {
+  color: var(--brand-mid);
+}
+
+.analytics-toggle:focus-visible {
+  outline: 2px solid var(--brand-mid);
+  outline-offset: 2px;
+}
+
 .analytics-report {
   background: var(--field-bg);
   border-radius: var(--radius);
@@ -886,6 +911,14 @@ a {
   margin: 4px 0 6px;
   font-family: var(--display);
   font-size: 1.25rem;
+}
+
+.analytics-geo {
+  margin-bottom: 12px;
+}
+
+.analytics-geo .geo-block {
+  margin-top: 0;
 }
 
 .analytics-grid {

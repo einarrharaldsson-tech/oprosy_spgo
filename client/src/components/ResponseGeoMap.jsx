@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
@@ -17,16 +17,28 @@ function formatCoord(n) {
   return Number(n).toFixed(5);
 }
 
-export default function ResponseGeoMap({ geo }) {
+function toMarkers(geo, points) {
+  const source = points?.length ? points : geo ? [geo] : [];
+  return source
+    .map((point, index) => ({
+      lat: Number(point.lat),
+      lng: Number(point.lng),
+      accuracy: point.accuracy,
+      label: point.label || '',
+      key: point.id ?? `${index}`,
+    }))
+    .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng));
+}
+
+export default function ResponseGeoMap({ geo, points, title }) {
   const mapElRef = useRef(null);
   const mapRef = useRef(null);
-
-  const lat = geo?.lat;
-  const lng = geo?.lng;
-  const hasPoint = Number.isFinite(lat) && Number.isFinite(lng);
+  const markers = useMemo(() => toMarkers(geo, points), [geo, points]);
+  const many = markers.length > 1;
+  const heading = title || (many ? 'Геометки проведений' : 'Место проведения');
 
   useEffect(() => {
-    if (!hasPoint || !mapElRef.current) return undefined;
+    if (!markers.length || !mapElRef.current) return undefined;
 
     if (mapRef.current) {
       mapRef.current.remove();
@@ -37,7 +49,7 @@ export default function ResponseGeoMap({ geo }) {
       zoomControl: true,
       attributionControl: true,
       scrollWheelZoom: false,
-    }).setView([lat, lng], 16);
+    });
     map.attributionControl.setPrefix(false);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -45,37 +57,62 @@ export default function ResponseGeoMap({ geo }) {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map);
 
-    L.marker([lat, lng]).addTo(map);
-    mapRef.current = map;
+    const layer = L.featureGroup();
+    for (const point of markers) {
+      const marker = L.marker([point.lat, point.lng]);
+      if (point.label) marker.bindTooltip(point.label);
+      layer.addLayer(marker);
+    }
+    layer.addTo(map);
 
+    const bounds = layer.getBounds();
+    const northEast = bounds.getNorthEast();
+    const southWest = bounds.getSouthWest();
+    const spread = markers.length > 1 && (northEast.lat !== southWest.lat || northEast.lng !== southWest.lng);
+    if (spread) {
+      map.fitBounds(bounds.pad(0.25), { maxZoom: 16 });
+    } else {
+      map.setView([markers[0].lat, markers[0].lng], 16);
+    }
+
+    mapRef.current = map;
     const onResize = () => map.invalidateSize();
-    window.setTimeout(onResize, 50);
+    const timer = window.setTimeout(onResize, 50);
 
     return () => {
+      window.clearTimeout(timer);
       map.remove();
       mapRef.current = null;
     };
-  }, [hasPoint, lat, lng]);
+  }, [markers]);
 
-  if (!hasPoint) return null;
+  if (!markers.length) return null;
 
-  const osmUrl = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=17/${lat}/${lng}`;
-  const yandexUrl = `https://yandex.ru/maps/?pt=${lng},${lat}&z=17&l=map`;
+  const first = markers[0];
+  const osmUrl =
+    markers.length === 1
+      ? `https://www.openstreetmap.org/?mlat=${first.lat}&mlon=${first.lng}#map=17/${first.lat}/${first.lng}`
+      : `https://www.openstreetmap.org/?mlat=${first.lat}&mlon=${first.lng}#map=13/${first.lat}/${first.lng}`;
+  const yandexUrl =
+    markers.length === 1
+      ? `https://yandex.ru/maps/?pt=${first.lng},${first.lat}&z=17&l=map`
+      : `https://yandex.ru/maps/?pt=${markers.map((point) => `${point.lng},${point.lat}`).join('~')}&z=13&l=map`;
   const accuracy =
-    geo.accuracy != null && Number.isFinite(Number(geo.accuracy))
-      ? Math.round(Number(geo.accuracy))
+    !many && first.accuracy != null && Number.isFinite(Number(first.accuracy))
+      ? Math.round(Number(first.accuracy))
       : null;
 
   return (
     <div className="geo-block">
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
-        <strong>Место проведения</strong>
+        <strong>{heading}</strong>
         <span className="muted" style={{ fontSize: '0.85rem' }}>
-          {formatCoord(lat)}, {formatCoord(lng)}
-          {accuracy != null ? ` · ±${accuracy} м` : ''}
+          {many
+            ? `${markers.length} точек`
+            : `${formatCoord(first.lat)}, ${formatCoord(first.lng)}${accuracy != null ? ` · ±${accuracy} м` : ''}`}
         </span>
       </div>
-      <div ref={mapElRef} className="geo-map" role="img" aria-label="Карта места проведения" />
+      <div ref={mapElRef} className="geo-map" role="img" aria-label={heading} />
       <div className="row" style={{ marginTop: 8, gap: 12, flexWrap: 'wrap' }}>
         <a href={osmUrl} target="_blank" rel="noreferrer" className="muted" style={{ fontSize: '0.9rem' }}>
           Открыть в OpenStreetMap
