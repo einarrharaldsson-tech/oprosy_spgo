@@ -188,19 +188,6 @@ export default function AnalyticsGeoMap({ items }) {
               Схема взаимного расположения точек (без подложки карты).
             </p>
           </div>
-
-          <ul className="analytics-geo__list">
-            {points.map((p) => (
-              <li key={p.id}>
-                <strong>#{p.sessionNumber}</strong>
-                <span className="muted">
-                  {' '}
-                  · {formatCoord(p.lat)}, {formatCoord(p.lng)}
-                  {p.conductorName ? ` · ${p.conductorName}` : ''}
-                </span>
-              </li>
-            ))}
-          </ul>
         </>
       )}
     </article>
