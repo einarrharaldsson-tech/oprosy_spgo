@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { query } from '../db.js';
+import { query, withTransaction } from '../db.js';
 import { authRequired, requireRoles } from '../middleware/auth.js';
 import { hashPassword } from '../services/authPassword.js';
 
@@ -143,6 +143,70 @@ router.put('/:id', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Не удалось обновить пользователя' });
+  }
+});
+
+/**
+ * Delete a user (admin only).
+ * Responses / upload sessions / surveys created by them are reassigned to the current admin
+ * so historical conducts stay visible as «Администратор».
+ */
+router.delete('/:id', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'Некорректный пользователь' });
+    }
+    if (id === req.user.id) {
+      return res.status(400).json({ error: 'Нельзя удалить собственную учётную запись' });
+    }
+
+    const users = await query('SELECT id, login, role FROM users WHERE id = :id', { id });
+    if (!users.length) {
+      return res.status(404).json({ error: 'Пользователь не найден' });
+    }
+    const target = users[0];
+
+    if (target.role === 'admin') {
+      const admins = await query(`SELECT COUNT(*) AS c FROM users WHERE role = 'admin'`);
+      if (Number(admins[0].c) <= 1) {
+        return res.status(400).json({ error: 'Нельзя удалить последнего администратора' });
+      }
+    }
+
+    const adminId = req.user.id;
+    const stats = await withTransaction(async (conn) => {
+      const [resp] = await conn.execute(
+        `UPDATE responses SET conducted_by = :adminId WHERE conducted_by = :id`,
+        { adminId, id }
+      );
+      const [uploads] = await conn.execute(
+        `UPDATE response_upload_sessions SET conducted_by = :adminId WHERE conducted_by = :id`,
+        { adminId, id }
+      );
+      const [surveys] = await conn.execute(
+        `UPDATE surveys SET created_by = :adminId WHERE created_by = :id`,
+        { adminId, id }
+      );
+      // survey_access cascades on user delete
+      await conn.execute(`DELETE FROM users WHERE id = :id`, { id });
+      return {
+        responsesReassigned: resp.affectedRows || 0,
+        uploadSessionsReassigned: uploads.affectedRows || 0,
+        surveysReassigned: surveys.affectedRows || 0,
+      };
+    });
+
+    res.json({
+      ok: true,
+      deletedId: id,
+      deletedLogin: target.login,
+      reassignedToAdminId: adminId,
+      ...stats,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Не удалось удалить пользователя' });
   }
 });
 

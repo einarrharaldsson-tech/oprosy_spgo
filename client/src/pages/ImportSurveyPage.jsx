@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, getToken } from '../api';
 import { getApiBase } from '../lib/paths.js';
-import { validateJumpConfiguration } from '../lib/jumpLogic';
+import { relaxRequiredForSkippedQuestions, validateJumpConfiguration } from '../lib/jumpLogic';
 
 const TYPE_LABEL = {
   checkbox: 'Варианты',
@@ -60,24 +60,26 @@ export default function ImportSurveyPage() {
           .filter((q) => Number.isInteger(q.sourceNumber))
           .map((q, index) => [q.sourceNumber, index])
       );
+      const questions = (data.questions || []).map((q) => ({
+        text: q.text || '',
+        answerType: q.answerType || 'checkbox',
+        isRequired: q.isRequired !== false,
+        allowMultiple: q.allowMultiple !== false,
+        options: (q.options || []).map((o) => ({
+          text: o.text || '',
+          jumpAction: o.jumpAction || 'none',
+          jumpToQuestionIndex:
+            o.jumpAction === 'jump' && sourceIndexByNumber.has(o.jumpToSourceNumber)
+              ? sourceIndexByNumber.get(o.jumpToSourceNumber)
+              : null,
+        })),
+        sourceNumber: q.sourceNumber,
+      }));
+      relaxRequiredForSkippedQuestions(questions);
       setDraft({
         title: data.title || '',
         description: data.description || '',
-        questions: (data.questions || []).map((q) => ({
-          text: q.text || '',
-          answerType: q.answerType || 'checkbox',
-          isRequired: q.isRequired !== false,
-          allowMultiple: q.allowMultiple !== false,
-          options: (q.options || []).map((o) => ({
-            text: o.text || '',
-            jumpAction: o.jumpAction || 'none',
-            jumpToQuestionIndex:
-              o.jumpAction === 'jump' && sourceIndexByNumber.has(o.jumpToSourceNumber)
-                ? sourceIndexByNumber.get(o.jumpToSourceNumber)
-                : null,
-          })),
-          sourceNumber: q.sourceNumber,
-        })),
+        questions,
         warnings: data.warnings || [],
       });
     } catch (err) {
