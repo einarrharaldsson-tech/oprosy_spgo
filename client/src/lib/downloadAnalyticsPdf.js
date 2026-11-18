@@ -8,6 +8,26 @@ const CAPTURE_OPTIONS = {
   logging: false,
 };
 
+const STYLE_KEYS = [
+  'color',
+  'background',
+  'backgroundColor',
+  'border',
+  'borderRadius',
+  'boxShadow',
+  'padding',
+];
+
+function snapshotStyles(el) {
+  const snap = {};
+  for (const key of STYLE_KEYS) snap[key] = el.style[key];
+  return snap;
+}
+
+function restoreStyles(el, snap) {
+  for (const key of STYLE_KEYS) el.style[key] = snap[key] || '';
+}
+
 async function captureBlock(element) {
   const canvas = await html2canvas(element, CAPTURE_OPTIONS);
   return {
@@ -30,15 +50,37 @@ async function captureHeadBlock(element) {
     ),
   ];
   for (const el of targets) {
-    touched.push({ el, color: el.style.color });
+    touched.push({ el, snap: snapshotStyles(el) });
     el.style.color = '#111111';
   }
   try {
     return await captureBlock(element);
   } finally {
-    for (const item of touched) {
-      item.el.style.color = item.color;
-    }
+    for (const item of touched) restoreStyles(item.el, item.snap);
+  }
+}
+
+/**
+ * Session Q&A for PDF: no panel/background — plain black text on white.
+ */
+async function capturePlainTextBlock(element) {
+  const touched = [];
+  const all = [element, ...element.querySelectorAll('*')];
+  for (const el of all) {
+    touched.push({ el, snap: snapshotStyles(el) });
+    el.style.background = 'transparent';
+    el.style.backgroundColor = 'transparent';
+    el.style.border = 'none';
+    el.style.borderRadius = '0';
+    el.style.boxShadow = 'none';
+    el.style.color = '#111111';
+  }
+  // Drop panel padding so text sits flush on the white page.
+  element.style.padding = '0';
+  try {
+    return await captureBlock(element);
+  } finally {
+    for (const item of touched) restoreStyles(item.el, item.snap);
   }
 }
 
@@ -83,6 +125,12 @@ function addBlockPaginated(pdf, block, cursorY, { margin, gap, usableWidth, page
   return margin + remainder + gap;
 }
 
+async function captureJob(job) {
+  if (job.type === 'head') return captureHeadBlock(job.el);
+  if (job.type === 'plain') return capturePlainTextBlock(job.el);
+  return captureBlock(job.el);
+}
+
 export async function downloadAnalyticsPdf(element, filename) {
   const header =
     element.querySelector('[data-pdf-block="head"]') ||
@@ -96,8 +144,8 @@ export async function downloadAnalyticsPdf(element, filename) {
   if (header) jobs.push({ type: 'head', el: header });
   for (const geo of geoBlocks) jobs.push({ type: 'normal', el: geo });
   for (const card of cards) jobs.push({ type: 'normal', el: card });
-  if (sessionsHead) jobs.push({ type: 'normal', el: sessionsHead });
-  for (const session of sessions) jobs.push({ type: 'normal', el: session });
+  if (sessionsHead) jobs.push({ type: 'plain', el: sessionsHead });
+  for (const session of sessions) jobs.push({ type: 'plain', el: session });
 
   if (!jobs.length) {
     throw new Error('Нет блоков для PDF');
@@ -105,7 +153,7 @@ export async function downloadAnalyticsPdf(element, filename) {
 
   const captured = [];
   for (const job of jobs) {
-    captured.push(job.type === 'head' ? await captureHeadBlock(job.el) : await captureBlock(job.el));
+    captured.push(await captureJob(job));
   }
 
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
