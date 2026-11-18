@@ -17,18 +17,28 @@ async function captureBlock(element) {
   };
 }
 
-/** For geo blocks: hide Leaflet/OSM tiles and show the self-contained SVG schema. */
-async function captureGeoBlock(element) {
-  const map = element.querySelector('[data-pdf-ignore-map]');
-  const schema = element.querySelector('[data-pdf-schema]');
-  const prevHidden = schema ? schema.hidden : null;
-  if (map) map.setAttribute('data-html2canvas-ignore', 'true');
-  if (schema) schema.hidden = false;
+/**
+ * Force black ink on the report header so soft/muted theme colors
+ * stay readable on the white PDF page background.
+ */
+async function captureHeadBlock(element) {
+  const touched = [];
+  const targets = [
+    element,
+    ...element.querySelectorAll(
+      '.analytics-report__kicker, .analytics-report__survey, .muted, p, h3'
+    ),
+  ];
+  for (const el of targets) {
+    touched.push({ el, color: el.style.color });
+    el.style.color = '#111111';
+  }
   try {
     return await captureBlock(element);
   } finally {
-    if (map) map.removeAttribute('data-html2canvas-ignore');
-    if (schema && prevHidden != null) schema.hidden = prevHidden;
+    for (const item of touched) {
+      item.el.style.color = item.color;
+    }
   }
 }
 
@@ -83,8 +93,8 @@ export async function downloadAnalyticsPdf(element, filename) {
   const sessions = [...element.querySelectorAll('[data-pdf-block="session"]')];
 
   const jobs = [];
-  if (header) jobs.push({ type: 'normal', el: header });
-  for (const geo of geoBlocks) jobs.push({ type: 'geo', el: geo });
+  if (header) jobs.push({ type: 'head', el: header });
+  for (const geo of geoBlocks) jobs.push({ type: 'normal', el: geo });
   for (const card of cards) jobs.push({ type: 'normal', el: card });
   if (sessionsHead) jobs.push({ type: 'normal', el: sessionsHead });
   for (const session of sessions) jobs.push({ type: 'normal', el: session });
@@ -95,7 +105,7 @@ export async function downloadAnalyticsPdf(element, filename) {
 
   const captured = [];
   for (const job of jobs) {
-    captured.push(job.type === 'geo' ? await captureGeoBlock(job.el) : await captureBlock(job.el));
+    captured.push(job.type === 'head' ? await captureHeadBlock(job.el) : await captureBlock(job.el));
   }
 
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
