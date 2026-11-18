@@ -161,27 +161,29 @@ export default function SurveyAnalytics({ survey, items, onError }) {
               {items.map((item) => {
                 const coords = formatGeoCoords(item.geo);
                 return (
-                  <article
-                    key={item.id}
-                    className="panel analytics-session"
-                    data-pdf-block="session"
-                  >
-                    <div className="analytics-session__head">
-                      <strong>Проведение #{item.sessionNumber}</strong>
-                      <span className="muted">
-                        {item.createdAt
-                          ? new Date(item.createdAt).toLocaleString('ru-RU')
-                          : '—'}
-                      </span>
+                  <article key={item.id} className="panel analytics-session">
+                    <div className="analytics-session__meta" data-pdf-block="session-meta">
+                      <div className="analytics-session__head">
+                        <strong>Проведение #{item.sessionNumber}</strong>
+                        <span className="muted">
+                          {item.createdAt
+                            ? new Date(item.createdAt).toLocaleString('ru-RU')
+                            : '—'}
+                        </span>
+                      </div>
+                      {coords && (
+                        <p className="muted analytics-session__geo">
+                          Геометка: {coords}
+                        </p>
+                      )}
                     </div>
-                    {coords && (
-                      <p className="muted analytics-session__geo">
-                        Геометка: {coords}
-                      </p>
-                    )}
                     <div className="analytics-session__answers">
                       {questions.map((q) => (
-                        <div key={q.id} className="analytics-session__qa">
+                        <div
+                          key={q.id}
+                          className="analytics-session__qa"
+                          data-pdf-block="session-qa"
+                        >
                           <div className="analytics-session__q">{q.text}</div>
                           <div className="muted analytics-session__a">
                             {answerText(q, item.answers)}

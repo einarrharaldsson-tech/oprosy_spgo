@@ -28,6 +28,15 @@ function restoreStyles(el, snap) {
   for (const key of STYLE_KEYS) el.style[key] = snap[key] || '';
 }
 
+function loadImage(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Не удалось подготовить фрагмент PDF'));
+    img.src = dataUrl;
+  });
+}
+
 async function captureBlock(element) {
   const canvas = await html2canvas(element, CAPTURE_OPTIONS);
   return {
@@ -75,7 +84,6 @@ async function capturePlainTextBlock(element) {
     el.style.boxShadow = 'none';
     el.style.color = '#111111';
   }
-  // Drop panel padding so text sits flush on the white page.
   element.style.padding = '0';
   try {
     return await captureBlock(element);
@@ -85,44 +93,83 @@ async function capturePlainTextBlock(element) {
 }
 
 /**
- * Draw a captured HTML block scaled to page width.
- * Tall blocks continue on following pages. Returns next Y cursor.
+ * Place a captured block on the PDF, starting a new page when needed.
+ * Tall blocks are cropped into page-sized strips (no overlapping/duplication).
  */
-function addBlockPaginated(pdf, block, cursorY, { margin, gap, usableWidth, pageHeight }) {
+async function addBlockPaginated(pdf, block, cursorY, { margin, gap, usableWidth, pageHeight }) {
   const drawW = usableWidth;
   const drawH = (block.height * drawW) / block.width;
   const pageContentHeight = pageHeight - margin * 2;
-  const spaceLeft = pageHeight - margin - cursorY;
+  // Avoid starting a fragment in a tiny leftover strip (cuts mid-line).
+  const minUseful = Math.min(28, pageContentHeight * 0.35);
 
-  if (cursorY > margin && drawH > spaceLeft) {
+  if (cursorY > margin && (drawH > pageHeight - margin - cursorY || pageHeight - margin - cursorY < minUseful)) {
     pdf.addPage();
     cursorY = margin;
   }
 
-  if (drawH <= pageHeight - margin - cursorY) {
+  if (drawH <= pageHeight - margin - cursorY + 0.05) {
     pdf.addImage(block.dataUrl, 'PNG', margin, cursorY, drawW, drawH, undefined, 'FAST');
     return cursorY + drawH + gap;
   }
 
-  let heightLeft = drawH;
+  const img = await loadImage(block.dataUrl);
+  const pxPerMm = block.width / drawW;
+  let srcY = 0;
+  let remainingPx = block.height;
   let y = cursorY;
-  pdf.addImage(block.dataUrl, 'PNG', margin, y, drawW, drawH, undefined, 'FAST');
-  heightLeft -= pageHeight - margin - cursorY;
 
-  while (heightLeft > 0.5) {
-    y = margin - (drawH - heightLeft);
-    pdf.addPage();
-    pdf.addImage(block.dataUrl, 'PNG', margin, y, drawW, drawH, undefined, 'FAST');
-    heightLeft -= pageContentHeight;
+  while (remainingPx > 0.5) {
+    const spaceMm = pageHeight - margin - y;
+    if (spaceMm < minUseful && y > margin) {
+      pdf.addPage();
+      y = margin;
+      continue;
+    }
+    const slicePx = Math.min(remainingPx, Math.max(1, spaceMm * pxPerMm));
+    const sliceMm = slicePx / pxPerMm;
+
+    const sliceCanvas = document.createElement('canvas');
+    sliceCanvas.width = block.width;
+    sliceCanvas.height = Math.max(1, Math.round(slicePx));
+    const ctx = sliceCanvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+    ctx.drawImage(
+      img,
+      0,
+      srcY,
+      block.width,
+      slicePx,
+      0,
+      0,
+      block.width,
+      sliceCanvas.height
+    );
+
+    pdf.addImage(
+      sliceCanvas.toDataURL('image/png'),
+      'PNG',
+      margin,
+      y,
+      drawW,
+      sliceMm,
+      undefined,
+      'FAST'
+    );
+
+    srcY += slicePx;
+    remainingPx -= slicePx;
+
+    if (remainingPx > 0.5) {
+      pdf.addPage();
+      y = margin;
+    } else {
+      y += sliceMm + gap;
+    }
   }
 
-  const remainder = ((drawH - (pageHeight - margin - cursorY)) % pageContentHeight + pageContentHeight) %
-    pageContentHeight;
-  if (remainder < 0.5) {
-    pdf.addPage();
-    return margin;
-  }
-  return margin + remainder + gap;
+  return y;
 }
 
 async function captureJob(job) {
@@ -138,14 +185,38 @@ export async function downloadAnalyticsPdf(element, filename) {
   const geoBlocks = [...element.querySelectorAll('[data-pdf-block="geo"]')];
   const cards = [...element.querySelectorAll('[data-pdf-block="card"]')];
   const sessionsHead = element.querySelector('[data-pdf-block="sessions-head"]');
-  const sessions = [...element.querySelectorAll('[data-pdf-block="session"]')];
+  // Prefer fine-grained session pieces so page breaks fall between Q&As.
+  const sessionMetas = [...element.querySelectorAll('[data-pdf-block="session-meta"]')];
+  const sessionQas = [...element.querySelectorAll('[data-pdf-block="session-qa"]')];
+  const legacySessions = [...element.querySelectorAll('[data-pdf-block="session"]')];
 
   const jobs = [];
-  if (header) jobs.push({ type: 'head', el: header });
-  for (const geo of geoBlocks) jobs.push({ type: 'normal', el: geo });
-  for (const card of cards) jobs.push({ type: 'normal', el: card });
-  if (sessionsHead) jobs.push({ type: 'plain', el: sessionsHead });
-  for (const session of sessions) jobs.push({ type: 'plain', el: session });
+  if (header) jobs.push({ type: 'head', el: header, gap: 5 });
+  for (const geo of geoBlocks) jobs.push({ type: 'normal', el: geo, gap: 5 });
+  for (const card of cards) jobs.push({ type: 'normal', el: card, gap: 5 });
+  if (sessionsHead) jobs.push({ type: 'plain', el: sessionsHead, gap: 6 });
+
+  if (sessionMetas.length || sessionQas.length) {
+    // Walk DOM order: meta and qa appear interleaved per session.
+    const ordered = [
+      ...element.querySelectorAll(
+        '[data-pdf-block="session-meta"], [data-pdf-block="session-qa"]'
+      ),
+    ];
+    for (const el of ordered) {
+      const kind = el.getAttribute('data-pdf-block');
+      jobs.push({
+        type: 'plain',
+        el,
+        gap: kind === 'session-meta' ? 3 : 2.5,
+        beforeGap: kind === 'session-meta' ? 4 : 0,
+      });
+    }
+  } else {
+    for (const session of legacySessions) {
+      jobs.push({ type: 'plain', el: session, gap: 5 });
+    }
+  }
 
   if (!jobs.length) {
     throw new Error('Нет блоков для PDF');
@@ -153,20 +224,27 @@ export async function downloadAnalyticsPdf(element, filename) {
 
   const captured = [];
   for (const job of jobs) {
-    captured.push(await captureJob(job));
+    const block = await captureJob(job);
+    captured.push({ ...block, gap: job.gap ?? 5, beforeGap: job.beforeGap ?? 0 });
   }
 
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = 12;
-  const gap = 5;
   const usableWidth = pdf.internal.pageSize.getWidth() - margin * 2;
 
   let cursorY = margin;
   for (const block of captured) {
-    cursorY = addBlockPaginated(pdf, block, cursorY, {
+    if (block.beforeGap && cursorY > margin) {
+      cursorY += block.beforeGap;
+      if (cursorY > pageHeight - margin - 20) {
+        pdf.addPage();
+        cursorY = margin;
+      }
+    }
+    cursorY = await addBlockPaginated(pdf, block, cursorY, {
       margin,
-      gap,
+      gap: block.gap,
       usableWidth,
       pageHeight,
     });
