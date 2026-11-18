@@ -1,5 +1,6 @@
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import { ensurePdfFonts, FONT_FAMILY } from './pdfFonts';
 
 const CAPTURE_OPTIONS = {
   scale: 2,
@@ -46,10 +47,7 @@ async function captureBlock(element) {
   };
 }
 
-/**
- * Force black ink on the report header so soft/muted theme colors
- * stay readable on the white PDF page background.
- */
+/** Force black ink on themed header before raster capture. */
 async function captureHeadBlock(element) {
   const touched = [];
   const targets = [
@@ -70,40 +68,18 @@ async function captureHeadBlock(element) {
 }
 
 /**
- * Session Q&A for PDF: no panel/background — plain black text on white.
- */
-async function capturePlainTextBlock(element) {
-  const touched = [];
-  const all = [element, ...element.querySelectorAll('*')];
-  for (const el of all) {
-    touched.push({ el, snap: snapshotStyles(el) });
-    el.style.background = 'transparent';
-    el.style.backgroundColor = 'transparent';
-    el.style.border = 'none';
-    el.style.borderRadius = '0';
-    el.style.boxShadow = 'none';
-    el.style.color = '#111111';
-  }
-  element.style.padding = '0';
-  try {
-    return await captureBlock(element);
-  } finally {
-    for (const item of touched) restoreStyles(item.el, item.snap);
-  }
-}
-
-/**
- * Place a captured block on the PDF, starting a new page when needed.
- * Tall blocks are cropped into page-sized strips (no overlapping/duplication).
+ * Place a captured image block on the PDF, cropping tall images into page strips.
  */
 async function addBlockPaginated(pdf, block, cursorY, { margin, gap, usableWidth, pageHeight }) {
   const drawW = usableWidth;
   const drawH = (block.height * drawW) / block.width;
   const pageContentHeight = pageHeight - margin * 2;
-  // Avoid starting a fragment in a tiny leftover strip (cuts mid-line).
   const minUseful = Math.min(28, pageContentHeight * 0.35);
 
-  if (cursorY > margin && (drawH > pageHeight - margin - cursorY || pageHeight - margin - cursorY < minUseful)) {
+  if (
+    cursorY > margin &&
+    (drawH > pageHeight - margin - cursorY || pageHeight - margin - cursorY < minUseful)
+  ) {
     pdf.addPage();
     cursorY = margin;
   }
@@ -172,82 +148,147 @@ async function addBlockPaginated(pdf, block, cursorY, { margin, gap, usableWidth
   return y;
 }
 
-async function captureJob(job) {
-  if (job.type === 'head') return captureHeadBlock(job.el);
-  if (job.type === 'plain') return capturePlainTextBlock(job.el);
-  return captureBlock(job.el);
+function ensureSpace(pdf, cursorY, needMm, { margin, pageHeight }) {
+  if (cursorY > margin && cursorY + needMm > pageHeight - margin) {
+    pdf.addPage();
+    return margin;
+  }
+  return cursorY;
 }
 
-export async function downloadAnalyticsPdf(element, filename) {
+function writeWrappedLines(pdf, lines, x, cursorY, lineHeight, opts) {
+  let y = cursorY;
+  for (const line of lines) {
+    y = ensureSpace(pdf, y, lineHeight, opts);
+    pdf.text(line, x, y + lineHeight * 0.8);
+    y += lineHeight;
+  }
+  return y;
+}
+
+/**
+ * Native-text sessions: fast, searchable, clean page breaks between Q&A.
+ * @returns next Y cursor
+ */
+export function appendSessionsText(pdf, sessions, cursorY, layout) {
+  const { margin, usableWidth, pageHeight } = layout;
+  const opts = { margin, pageHeight };
+  let y = cursorY;
+
+  y = ensureSpace(pdf, y, 10, opts);
+  if (y > margin) y += 4;
+
+  pdf.setFont(FONT_FAMILY, 'bold');
+  pdf.setFontSize(13);
+  pdf.setTextColor(17, 17, 17);
+  y = ensureSpace(pdf, y, 8, opts);
+  pdf.text('Все проведения', margin, y + 5);
+  y += 10;
+
+  for (let i = 0; i < sessions.length; i += 1) {
+    const session = sessions[i];
+    const headParts = [`Проведение #${session.sessionNumber}`];
+    if (session.createdAtLabel) headParts.push(session.createdAtLabel);
+    const head = headParts.join('  ·  ');
+
+    pdf.setFont(FONT_FAMILY, 'bold');
+    pdf.setFontSize(11);
+    const headLines = pdf.splitTextToSize(head, usableWidth);
+    const headBlockH = headLines.length * 5.5 + (session.geoLabel ? 5 : 0) + 4;
+    y = ensureSpace(pdf, y, Math.min(headBlockH, 24), opts);
+    if (i > 0) y += 3;
+
+    y = writeWrappedLines(pdf, headLines, margin, y, 5.5, opts);
+
+    if (session.geoLabel) {
+      pdf.setFont(FONT_FAMILY, 'normal');
+      pdf.setFontSize(9);
+      const geoLines = pdf.splitTextToSize(`Геометка: ${session.geoLabel}`, usableWidth);
+      y = writeWrappedLines(pdf, geoLines, margin, y, 4.5, opts);
+    }
+
+    y += 1.5;
+
+    for (const qa of session.answers || []) {
+      pdf.setFont(FONT_FAMILY, 'bold');
+      pdf.setFontSize(10);
+      const qLines = pdf.splitTextToSize(String(qa.question || ''), usableWidth);
+
+      pdf.setFont(FONT_FAMILY, 'normal');
+      pdf.setFontSize(10);
+      const aLines = pdf.splitTextToSize(String(qa.answer || '—'), usableWidth);
+
+      const blockH = qLines.length * 5 + aLines.length * 5 + 3;
+      y = ensureSpace(pdf, y, Math.min(blockH, 22), opts);
+
+      pdf.setFont(FONT_FAMILY, 'bold');
+      pdf.setFontSize(10);
+      y = writeWrappedLines(pdf, qLines, margin, y, 5, opts);
+
+      pdf.setFont(FONT_FAMILY, 'normal');
+      pdf.setFontSize(10);
+      y = writeWrappedLines(pdf, aLines, margin, y, 5, opts);
+      y += 2.5;
+    }
+  }
+
+  return y;
+}
+
+/**
+ * Build analytics PDF.
+ * Visual blocks (header/geo/charts) are captured from the DOM;
+ * session answers are written as native text for speed and clean pagination.
+ *
+ * @param {HTMLElement} element report root
+ * @param {string} filename
+ * @param {{ sessions?: Array }} [options]
+ */
+export async function downloadAnalyticsPdf(element, filename, options = {}) {
+  const sessions = Array.isArray(options.sessions) ? options.sessions : [];
+
   const header =
     element.querySelector('[data-pdf-block="head"]') ||
     element.querySelector('.analytics-report__head');
   const geoBlocks = [...element.querySelectorAll('[data-pdf-block="geo"]')];
   const cards = [...element.querySelectorAll('[data-pdf-block="card"]')];
-  const sessionsHead = element.querySelector('[data-pdf-block="sessions-head"]');
-  // Prefer fine-grained session pieces so page breaks fall between Q&As.
-  const sessionMetas = [...element.querySelectorAll('[data-pdf-block="session-meta"]')];
-  const sessionQas = [...element.querySelectorAll('[data-pdf-block="session-qa"]')];
-  const legacySessions = [...element.querySelectorAll('[data-pdf-block="session"]')];
 
   const jobs = [];
   if (header) jobs.push({ type: 'head', el: header, gap: 5 });
   for (const geo of geoBlocks) jobs.push({ type: 'normal', el: geo, gap: 5 });
   for (const card of cards) jobs.push({ type: 'normal', el: card, gap: 5 });
-  if (sessionsHead) jobs.push({ type: 'plain', el: sessionsHead, gap: 6 });
 
-  if (sessionMetas.length || sessionQas.length) {
-    // Walk DOM order: meta and qa appear interleaved per session.
-    const ordered = [
-      ...element.querySelectorAll(
-        '[data-pdf-block="session-meta"], [data-pdf-block="session-qa"]'
-      ),
-    ];
-    for (const el of ordered) {
-      const kind = el.getAttribute('data-pdf-block');
-      jobs.push({
-        type: 'plain',
-        el,
-        gap: kind === 'session-meta' ? 3 : 2.5,
-        beforeGap: kind === 'session-meta' ? 4 : 0,
-      });
-    }
-  } else {
-    for (const session of legacySessions) {
-      jobs.push({ type: 'plain', el: session, gap: 5 });
-    }
-  }
-
-  if (!jobs.length) {
+  if (!jobs.length && !sessions.length) {
     throw new Error('Нет блоков для PDF');
   }
 
   const captured = [];
   for (const job of jobs) {
-    const block = await captureJob(job);
-    captured.push({ ...block, gap: job.gap ?? 5, beforeGap: job.beforeGap ?? 0 });
+    const block =
+      job.type === 'head' ? await captureHeadBlock(job.el) : await captureBlock(job.el);
+    captured.push({ ...block, gap: job.gap ?? 5 });
   }
 
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  await ensurePdfFonts(pdf);
+
   const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = 12;
   const usableWidth = pdf.internal.pageSize.getWidth() - margin * 2;
+  const layout = { margin, usableWidth, pageHeight };
 
   let cursorY = margin;
   for (const block of captured) {
-    if (block.beforeGap && cursorY > margin) {
-      cursorY += block.beforeGap;
-      if (cursorY > pageHeight - margin - 20) {
-        pdf.addPage();
-        cursorY = margin;
-      }
-    }
     cursorY = await addBlockPaginated(pdf, block, cursorY, {
       margin,
       gap: block.gap,
       usableWidth,
       pageHeight,
     });
+  }
+
+  if (sessions.length) {
+    appendSessionsText(pdf, sessions, cursorY, layout);
   }
 
   pdf.save(filename);

@@ -38,10 +38,22 @@ export default function SurveyAnalytics({ survey, items, onError }) {
         .replace(/[<>:"/\\|?*]+/g, ' ')
         .trim()
         .slice(0, 80);
+      const sessions = items.map((item) => ({
+        sessionNumber: item.sessionNumber,
+        createdAtLabel: item.createdAt
+          ? new Date(item.createdAt).toLocaleString('ru-RU')
+          : '',
+        geoLabel: formatGeoCoords(item.geo) || '',
+        answers: questions.map((q) => ({
+          question: q.text,
+          answer: answerText(q, item.answers),
+        })),
+      }));
       const { downloadAnalyticsPdf } = await import('../lib/downloadAnalyticsPdf');
       await downloadAnalyticsPdf(
         reportRef.current,
-        `${safeTitle || 'opros'}_analytics_${stamp}.pdf`
+        `${safeTitle || 'opros'}_analytics_${stamp}.pdf`,
+        { sessions }
       );
     } catch (err) {
       onError?.(err.message || 'Не удалось сформировать PDF');
@@ -154,15 +166,13 @@ export default function SurveyAnalytics({ survey, items, onError }) {
           </div>
 
           <div className="analytics-sessions">
-            <h3 className="analytics-sessions__title" data-pdf-block="sessions-head">
-              Все проведения
-            </h3>
+            <h3 className="analytics-sessions__title">Все проведения</h3>
             <div className="stack analytics-sessions__list">
               {items.map((item) => {
                 const coords = formatGeoCoords(item.geo);
                 return (
                   <article key={item.id} className="panel analytics-session">
-                    <div className="analytics-session__meta" data-pdf-block="session-meta">
+                    <div className="analytics-session__meta">
                       <div className="analytics-session__head">
                         <strong>Проведение #{item.sessionNumber}</strong>
                         <span className="muted">
@@ -179,11 +189,7 @@ export default function SurveyAnalytics({ survey, items, onError }) {
                     </div>
                     <div className="analytics-session__answers">
                       {questions.map((q) => (
-                        <div
-                          key={q.id}
-                          className="analytics-session__qa"
-                          data-pdf-block="session-qa"
-                        >
+                        <div key={q.id} className="analytics-session__qa">
                           <div className="analytics-session__q">{q.text}</div>
                           <div className="muted analytics-session__a">
                             {answerText(q, item.answers)}
