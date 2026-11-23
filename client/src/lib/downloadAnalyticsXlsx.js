@@ -126,10 +126,17 @@ function writeMunicipalityBlock(ws, startRow, district, total) {
   applyBorder(ws.getCell(r, 2));
   r += 1;
 
+  // Column header = district name; next row is the respondent count.
   styleHeader(ws.getCell(r, 1));
-  ws.getCell(r, 1).value = 'Число опрошенных';
+  ws.getCell(r, 1).value = '';
   styleHeader(ws.getCell(r, 2));
   ws.getCell(r, 2).value = district;
+  r += 1;
+
+  styleHeader(ws.getCell(r, 1));
+  ws.getCell(r, 1).value = 'Число опрошенных';
+  styleCount(ws.getCell(r, 2), true);
+  ws.getCell(r, 2).value = total;
   r += 1;
 
   styleOption(ws.getCell(r, 1));
@@ -148,7 +155,7 @@ function writeMunicipalityBlock(ws, startRow, district, total) {
   return r + 2; // blank gap like the template
 }
 
-function writeQuestionBlock(ws, startRow, questionText, district, rows) {
+function writeQuestionBlock(ws, startRow, questionText, district, rows, totalRespondents) {
   let r = startRow;
   ws.mergeCells(r, 1, r, 2);
   styleTitle(ws.getCell(r, 1));
@@ -156,10 +163,18 @@ function writeQuestionBlock(ws, startRow, questionText, district, rows) {
   applyBorder(ws.getCell(r, 2));
   r += 1;
 
+  // District as column header.
   styleHeader(ws.getCell(r, 1));
-  ws.getCell(r, 1).value = 'Число опрошенных';
+  ws.getCell(r, 1).value = '';
   styleHeader(ws.getCell(r, 2));
   ws.getCell(r, 2).value = district;
+  r += 1;
+
+  // «Число опрошенных» must be the numeric headcount, not the district name.
+  styleHeader(ws.getCell(r, 1));
+  ws.getCell(r, 1).value = 'Число опрошенных';
+  styleCount(ws.getCell(r, 2), true);
+  ws.getCell(r, 2).value = totalRespondents;
   r += 1;
 
   const firstData = r;
@@ -192,9 +207,15 @@ function writeQuestionBlock(ws, startRow, questionText, district, rows) {
     r += 1;
 
     styleHeader(ws.getCell(r, 1));
-    ws.getCell(r, 1).value = '% ответа другое';
+    ws.getCell(r, 1).value = '';
     styleHeader(ws.getCell(r, 2));
     ws.getCell(r, 2).value = district;
+    r += 1;
+
+    styleHeader(ws.getCell(r, 1));
+    ws.getCell(r, 1).value = 'Число ответов «другое»';
+    styleCount(ws.getCell(r, 2), true);
+    ws.getCell(r, 2).value = otherTexts.length;
     r += 1;
 
     for (const text of otherTexts) {
@@ -236,7 +257,14 @@ export async function downloadAnalyticsXlsx({ survey, items, district = DISTRICT
   const questions = (survey?.questions || []).filter(isChoiceQuestion);
   for (const question of questions) {
     const rows = buildFrequencyRows(question, items);
-    row = writeQuestionBlock(ws, row, String(question.text || '').trim() || 'Вопрос', district, rows);
+    row = writeQuestionBlock(
+      ws,
+      row,
+      String(question.text || '').trim() || 'Вопрос',
+      district,
+      rows,
+      total
+    );
   }
 
   const buffer = await workbook.xlsx.writeBuffer();
