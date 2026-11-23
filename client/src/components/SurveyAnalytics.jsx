@@ -4,6 +4,24 @@ import PieChart from './PieChart';
 import { answerText, formatGeoCoords } from '../lib/responseAnswers';
 import { buildQuestionCharts } from '../lib/surveyAnalytics';
 
+/** PPTX export is limited to this survey for now. */
+const PROBLEMATIKA_PPTX_SURVEY_TITLE = 'Опросник по проблематике — ноябрь 2026';
+
+function normalizeSurveyTitle(title) {
+  return String(title || '')
+    .replace(/[—–−‐-]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function isProblematikaPptxSurvey(survey) {
+  return (
+    normalizeSurveyTitle(survey?.title) ===
+    normalizeSurveyTitle(PROBLEMATIKA_PPTX_SURVEY_TITLE)
+  );
+}
+
 function countGeoPoints(items) {
   let n = 0;
   for (const item of items || []) {
@@ -27,6 +45,7 @@ export default function SurveyAnalytics({ survey, items, onError }) {
   const geoCount = useMemo(() => countGeoPoints(items), [items]);
   const questions = survey?.questions || [];
   const canExport = items.length > 0;
+  const canPptx = canExport && isProblematikaPptxSurvey(survey);
   const exportBusy = pdfBusy || xlsxBusy || pptxBusy;
 
   const downloadPdf = async () => {
@@ -86,6 +105,7 @@ export default function SurveyAnalytics({ survey, items, onError }) {
   };
 
   const downloadPptx = async () => {
+    if (!isProblematikaPptxSurvey(survey)) return;
     onError?.('');
     setPptxBusy(true);
     try {
@@ -159,15 +179,17 @@ export default function SurveyAnalytics({ survey, items, onError }) {
             >
               {xlsxBusy ? 'Формирование Excel…' : 'Скачать Excel-отчёт'}
             </button>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              style={{ minHeight: 36, padding: '0 12px' }}
-              onClick={downloadPptx}
-              disabled={exportBusy || !canExport}
-            >
-              {pptxBusy ? 'Формирование PPTX…' : 'Скачать презентацию'}
-            </button>
+            {canPptx && (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ minHeight: 36, padding: '0 12px' }}
+                onClick={downloadPptx}
+                disabled={exportBusy}
+              >
+                {pptxBusy ? 'Формирование PPTX…' : 'Скачать презентацию'}
+              </button>
+            )}
           </div>
         )}
       </div>

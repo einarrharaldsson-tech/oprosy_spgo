@@ -7,6 +7,24 @@ import gerbUrl from '../assets/report/spgo-gerb.png';
 export const DISTRICT_FULL = 'Сергиево - Посадский городской округ';
 export const DISTRICT_CODE = 'СПГО';
 
+/** Only this survey gets the municipal problematika PPTX button. */
+export const PROBLEMATIKA_PPTX_SURVEY_TITLE = 'Опросник по проблематике — ноябрь 2026';
+
+function normalizeSurveyTitle(title) {
+  return String(title || '')
+    .replace(/[—–−‐-]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+export function isProblematikaPptxSurvey(survey) {
+  return (
+    normalizeSurveyTitle(survey?.title) ===
+    normalizeSurveyTitle(PROBLEMATIKA_PPTX_SURVEY_TITLE)
+  );
+}
+
 /** e.g. 4кв26 / ноябрь 2026 */
 export function quarterParts(date = new Date()) {
   const q = Math.floor(date.getMonth() / 3) + 1;
@@ -491,6 +509,11 @@ export async function buildAnalyticsPptxBuffer({
 }
 
 export async function downloadAnalyticsPptx(opts) {
+  if (!isProblematikaPptxSurvey(opts?.survey)) {
+    throw new Error(
+      `Презентация доступна только для опроса «${PROBLEMATIKA_PPTX_SURVEY_TITLE}»`
+    );
+  }
   const bytes = await buildAnalyticsPptxBuffer(opts);
   const blob = new Blob([bytes], {
     type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
