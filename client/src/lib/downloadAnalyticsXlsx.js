@@ -136,7 +136,7 @@ function writeMunicipalityBlock(ws, startRow, district, total) {
   let r = startRow;
   ws.mergeCells(r, 1, r, 2);
   styleTitle(ws.getCell(r, 1));
-  ws.getCell(r, 1).value = 'МУНИЦИПАЛИТЕТ';
+  ws.getCell(r, 1).value = 'Сергиево - Посадский городской округ';
   applyBorder(ws.getCell(r, 2));
   r += 1;
 
