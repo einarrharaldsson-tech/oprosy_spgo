@@ -18,6 +18,7 @@ export default function SurveyAnalytics({ survey, items, onError }) {
   const reportRef = useRef(null);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [xlsxBusy, setXlsxBusy] = useState(false);
+  const [pptxBusy, setPptxBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const charts = useMemo(
     () => buildQuestionCharts(survey?.questions || [], items),
@@ -26,7 +27,7 @@ export default function SurveyAnalytics({ survey, items, onError }) {
   const geoCount = useMemo(() => countGeoPoints(items), [items]);
   const questions = survey?.questions || [];
   const canExport = items.length > 0;
-  const exportBusy = pdfBusy || xlsxBusy;
+  const exportBusy = pdfBusy || xlsxBusy || pptxBusy;
 
   const downloadPdf = async () => {
     if (!reportRef.current) return;
@@ -84,6 +85,43 @@ export default function SurveyAnalytics({ survey, items, onError }) {
     }
   };
 
+  const downloadPptx = async () => {
+    onError?.('');
+    setPptxBusy(true);
+    try {
+      // Capture the analytics geo map for all geography slide variants.
+      let overview;
+      const mapNode = reportRef.current?.querySelector('.analytics-geo, .leaflet-container')?.closest('[data-pdf-block], .analytics-geo')
+        || reportRef.current?.querySelector('.leaflet-container');
+      if (mapNode) {
+        await new Promise((resolve) => window.setTimeout(resolve, 400));
+        const { default: html2canvas } = await import('html2canvas');
+        const canvas = await html2canvas(mapNode, {
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff',
+          scale: 2,
+        });
+        overview = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+      }
+      const { downloadAnalyticsPptx, analyticsPptxFilename } = await import(
+        '../lib/downloadAnalyticsPptx'
+      );
+      await downloadAnalyticsPptx({
+        survey,
+        items,
+        mapImages: overview
+          ? { overview, zooms: [overview, overview, overview, overview] }
+          : {},
+        filename: analyticsPptxFilename(),
+      });
+    } catch (err) {
+      onError?.(err.message || 'Не удалось сформировать презентацию');
+    } finally {
+      setPptxBusy(false);
+    }
+  };
+
   if (!items.length) return null;
 
   return (
@@ -120,6 +158,15 @@ export default function SurveyAnalytics({ survey, items, onError }) {
               disabled={exportBusy || !canExport}
             >
               {xlsxBusy ? 'Формирование Excel…' : 'Скачать Excel-отчёт'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ minHeight: 36, padding: '0 12px' }}
+              onClick={downloadPptx}
+              disabled={exportBusy || !canExport}
+            >
+              {pptxBusy ? 'Формирование PPTX…' : 'Скачать презентацию'}
             </button>
           </div>
         )}
