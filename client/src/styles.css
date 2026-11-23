@@ -1077,12 +1077,38 @@ a {
 .analytics-other__label {
   font-weight: 650;
   font-size: 0.85rem;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
 
-.analytics-other p {
-  margin: 0 0 4px;
-  font-size: 0.85rem;
+.analytics-other__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px 14px;
+}
+
+.analytics-other__item {
+  margin: 0;
+  padding: 0 0 0 10px;
+  border-left: 2px solid color-mix(in srgb, var(--brand) 35%, var(--line));
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 560px) {
+  .analytics-other__list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 900px) {
+  .analytics-other__list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (min-width: 768px) {

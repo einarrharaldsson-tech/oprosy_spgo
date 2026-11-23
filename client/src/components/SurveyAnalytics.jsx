@@ -151,13 +151,17 @@ export default function SurveyAnalytics({ survey, items, onError }) {
                   {chart.slices.some((slice) => slice.otherTexts.length) && (
                     <div className="analytics-other">
                       <div className="analytics-other__label">Тексты «Другое»</div>
-                      {chart.slices
-                        .filter((slice) => slice.otherTexts.length)
-                        .map((slice) => (
-                          <p key={slice.id} className="muted">
-                            {slice.label}: {slice.otherTexts.join('; ')}
-                          </p>
-                        ))}
+                      <ul className="analytics-other__list">
+                        {chart.slices
+                          .filter((slice) => slice.otherTexts.length)
+                          .flatMap((slice) =>
+                            slice.otherTexts.map((text, i) => (
+                              <li key={`${slice.id}-${i}`} className="analytics-other__item">
+                                {text}
+                              </li>
+                            ))
+                          )}
+                      </ul>
                     </div>
                   )}
                 </article>
