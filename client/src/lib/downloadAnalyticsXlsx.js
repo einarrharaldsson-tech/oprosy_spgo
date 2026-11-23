@@ -211,7 +211,7 @@ function writeQuestionBlock(ws, startRow, questionText, district, rows, totalRes
   }
   r += 1;
 
-  const otherRows = rows.filter((row) => row.isOther);
+  const otherRows = rows.filter((row) => row.isOther || (row.otherTexts || []).length);
   const otherCount = otherRows.reduce((sum, row) => sum + (row.count || 0), 0);
   const otherTexts = otherRows.flatMap((row) => row.otherTexts || []);
   if (otherCount > 0 || otherTexts.length) {
@@ -222,17 +222,12 @@ function writeQuestionBlock(ws, startRow, questionText, district, rows, totalRes
     applyBorder(ws.getCell(r, 2));
     r += 1;
 
-    styleHeader(ws.getCell(r, 1));
-    ws.getCell(r, 1).value = '';
-    styleHeader(ws.getCell(r, 2));
-    ws.getCell(r, 2).value = district;
-    r += 1;
-
-    // Same % as in analytics charts: share of sessions who chose «Другое».
+    // Same % as analytics charts (share of sessions). Plain text so Excel shows it clearly.
     styleHeader(ws.getCell(r, 1));
     ws.getCell(r, 1).value = '% ответа другое';
     stylePercent(ws.getCell(r, 2), true);
-    ws.getCell(r, 2).value = roundPercent(otherCount, totalRespondents);
+    const otherPercent = roundPercent(otherCount, totalRespondents);
+    ws.getCell(r, 2).value = `${String(otherPercent).replace('.', ',')}%`;
     r += 1;
 
     for (const text of otherTexts) {
