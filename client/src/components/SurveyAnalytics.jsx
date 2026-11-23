@@ -17,6 +17,7 @@ function countGeoPoints(items) {
 export default function SurveyAnalytics({ survey, items, onError }) {
   const reportRef = useRef(null);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [xlsxBusy, setXlsxBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const charts = useMemo(
     () => buildQuestionCharts(survey?.questions || [], items),
@@ -25,6 +26,7 @@ export default function SurveyAnalytics({ survey, items, onError }) {
   const geoCount = useMemo(() => countGeoPoints(items), [items]);
   const questions = survey?.questions || [];
   const canExport = items.length > 0;
+  const exportBusy = pdfBusy || xlsxBusy;
 
   const downloadPdf = async () => {
     if (!reportRef.current) return;
@@ -62,6 +64,25 @@ export default function SurveyAnalytics({ survey, items, onError }) {
     }
   };
 
+  const downloadXlsx = async () => {
+    onError?.('');
+    setXlsxBusy(true);
+    try {
+      const { downloadAnalyticsXlsx, analyticsXlsxFilename } = await import(
+        '../lib/downloadAnalyticsXlsx'
+      );
+      await downloadAnalyticsXlsx({
+        survey,
+        items,
+        filename: analyticsXlsxFilename(),
+      });
+    } catch (err) {
+      onError?.(err.message || 'Не удалось сформировать Excel-отчёт');
+    } finally {
+      setXlsxBusy(false);
+    }
+  };
+
   if (!items.length) return null;
 
   return (
@@ -79,15 +100,26 @@ export default function SurveyAnalytics({ survey, items, onError }) {
           <h2 className="analytics__title">Аналитика</h2>
         </button>
         {open && (
-          <button
-            type="button"
-            className="btn btn-primary"
-            style={{ minHeight: 36, padding: '0 12px' }}
-            onClick={downloadPdf}
-            disabled={pdfBusy || !canExport}
-          >
-            {pdfBusy ? 'Формирование PDF…' : 'Скачать PDF-отчёт'}
-          </button>
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ minHeight: 36, padding: '0 12px' }}
+              onClick={downloadPdf}
+              disabled={exportBusy || !canExport}
+            >
+              {pdfBusy ? 'Формирование PDF…' : 'Скачать PDF-отчёт'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ minHeight: 36, padding: '0 12px' }}
+              onClick={downloadXlsx}
+              disabled={exportBusy || !canExport}
+            >
+              {xlsxBusy ? 'Формирование Excel…' : 'Скачать Excel-отчёт'}
+            </button>
+          </div>
         )}
       </div>
 
