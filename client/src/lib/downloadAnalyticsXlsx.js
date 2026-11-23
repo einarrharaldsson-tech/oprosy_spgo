@@ -46,6 +46,20 @@ function styleCount(cell, bold = false) {
   cell.numFmt = '0';
 }
 
+function stylePercent(cell, bold = false) {
+  cell.font = font({ bold, size: 11 });
+  cell.alignment = { horizontal: 'center', vertical: 'center', wrapText: true };
+  applyBorder(cell);
+  // Same rounding as analytics charts: one decimal place + % sign.
+  cell.numFmt = '0.0"%"';
+}
+
+/** Same rounding as SurveyAnalytics charts (share of sessions). */
+function roundPercent(count, total) {
+  if (!total) return 0;
+  return Math.round((count / total) * 1000) / 10;
+}
+
 /** e.g. 4кв26 for November 2026 */
 export function quarterLabel(date = new Date()) {
   const q = Math.floor(date.getMonth() / 3) + 1;
@@ -197,8 +211,10 @@ function writeQuestionBlock(ws, startRow, questionText, district, rows, totalRes
   }
   r += 1;
 
-  const otherTexts = rows.flatMap((row) => row.otherTexts || []);
-  if (otherTexts.length) {
+  const otherRows = rows.filter((row) => row.isOther);
+  const otherCount = otherRows.reduce((sum, row) => sum + (row.count || 0), 0);
+  const otherTexts = otherRows.flatMap((row) => row.otherTexts || []);
+  if (otherCount > 0 || otherTexts.length) {
     r += 2;
     ws.mergeCells(r, 1, r, 2);
     styleTitle(ws.getCell(r, 1));
@@ -212,10 +228,11 @@ function writeQuestionBlock(ws, startRow, questionText, district, rows, totalRes
     ws.getCell(r, 2).value = district;
     r += 1;
 
+    // Same % as in analytics charts: share of sessions who chose «Другое».
     styleHeader(ws.getCell(r, 1));
-    ws.getCell(r, 1).value = 'Число ответов «другое»';
-    styleCount(ws.getCell(r, 2), true);
-    ws.getCell(r, 2).value = otherTexts.length;
+    ws.getCell(r, 1).value = '% ответа другое';
+    stylePercent(ws.getCell(r, 2), true);
+    ws.getCell(r, 2).value = roundPercent(otherCount, totalRespondents);
     r += 1;
 
     for (const text of otherTexts) {
