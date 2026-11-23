@@ -1092,7 +1092,8 @@ a {
 .analytics-other__item {
   margin: 0;
   padding: 0 0 0 10px;
-  border-left: 2px solid color-mix(in srgb, var(--brand) 35%, var(--line));
+  /* Solid color only: html2canvas cannot parse color-mix() during PDF capture. */
+  border-left: 2px solid var(--brand-mid);
   font-size: 0.82rem;
   line-height: 1.35;
   color: var(--ink-soft);

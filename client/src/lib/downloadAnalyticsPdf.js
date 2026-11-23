@@ -38,8 +38,46 @@ function loadImage(dataUrl) {
   });
 }
 
+/** Match a node in the html2canvas clone back to the live DOM subtree. */
+function findLiveCounterpart(liveRoot, cloneRoot, cloneNode) {
+  if (cloneNode === cloneRoot) return liveRoot;
+  const path = [];
+  let cur = cloneNode;
+  while (cur && cur !== cloneRoot) {
+    const parent = cur.parentElement;
+    if (!parent) return null;
+    path.push([...parent.children].indexOf(cur));
+    cur = parent;
+  }
+  let live = liveRoot;
+  for (let i = path.length - 1; i >= 0; i -= 1) {
+    live = live?.children?.[path[i]];
+    if (!live) return null;
+  }
+  return live;
+}
+
 async function captureBlock(element) {
-  const canvas = await html2canvas(element, CAPTURE_OPTIONS);
+  const canvas = await html2canvas(element, {
+    ...CAPTURE_OPTIONS,
+    // html2canvas cannot parse color-mix()/color(); bake computed rgb onto the clone.
+    onclone: (_doc, clone) => {
+      const nodes = [clone, ...clone.querySelectorAll('*')];
+      for (const node of nodes) {
+        if (!(node instanceof Element)) continue;
+        const live = findLiveCounterpart(element, clone, node);
+        if (!(live instanceof Element)) continue;
+        const cs = window.getComputedStyle(live);
+        node.style.color = cs.color;
+        node.style.backgroundColor = cs.backgroundColor;
+        node.style.borderTopColor = cs.borderTopColor;
+        node.style.borderRightColor = cs.borderRightColor;
+        node.style.borderBottomColor = cs.borderBottomColor;
+        node.style.borderLeftColor = cs.borderLeftColor;
+        node.style.outlineColor = cs.outlineColor;
+      }
+    },
+  });
   return {
     dataUrl: canvas.toDataURL('image/png'),
     width: canvas.width,
