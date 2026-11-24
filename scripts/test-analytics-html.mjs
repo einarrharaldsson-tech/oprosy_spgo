@@ -26,8 +26,12 @@ fs.writeFileSync(
   tmpReport,
   rewrite(reportJs, [
     [
+      "import { buildQuestionCharts, isChoiceQuestion } from './surveyAnalytics.js';",
+      `import { buildQuestionCharts, isChoiceQuestion } from '${pathToFileURL(surveyAnalytics).href}';`,
+    ],
+    [
       "import { buildQuestionCharts, isChoiceQuestion } from './surveyAnalytics';",
-      `import { buildQuestionCharts, isChoiceQuestion } from '${surveyAnalytics}';`,
+      `import { buildQuestionCharts, isChoiceQuestion } from '${pathToFileURL(surveyAnalytics).href}';`,
     ],
   ])
 );
@@ -37,10 +41,15 @@ fs.writeFileSync(
   rewrite(htmlJs, [
     ["import gerbUrl from '../assets/report/spgo-gerb.png';\n", 'const gerbUrl = "";\n'],
     [
-      "import { piePath, CHART_COLORS } from './surveyAnalytics';",
-      `import { piePath, CHART_COLORS } from '${surveyAnalytics}';`,
+      "import { piePath, CHART_COLORS } from './surveyAnalytics.js';",
+      `import { piePath, CHART_COLORS } from '${pathToFileURL(surveyAnalytics).href}';`,
     ],
-    ["from './problematikaReport';", `from '${tmpReport}';`],
+    [
+      "import { piePath, CHART_COLORS } from './surveyAnalytics';",
+      `import { piePath, CHART_COLORS } from '${pathToFileURL(surveyAnalytics).href}';`,
+    ],
+    ["from './problematikaReport.js';", `from '${pathToFileURL(tmpReport).href}';`],
+    ["from './problematikaReport';", `from '${pathToFileURL(tmpReport).href}';`],
   ])
 );
 
