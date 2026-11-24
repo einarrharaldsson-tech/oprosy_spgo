@@ -109,10 +109,9 @@ export default function SurveyAnalytics({ survey, items, onError }) {
     onError?.('');
     setPptxBusy(true);
     try {
-      // Capture the analytics geo map for all geography slide variants.
+      // Capture only the Leaflet map (not the «Места проведения» card chrome).
       let overview;
-      const mapNode = reportRef.current?.querySelector('.analytics-geo, .leaflet-container')?.closest('[data-pdf-block], .analytics-geo')
-        || reportRef.current?.querySelector('.leaflet-container');
+      const mapNode = reportRef.current?.querySelector('.leaflet-container');
       if (mapNode) {
         await new Promise((resolve) => window.setTimeout(resolve, 400));
         const { default: html2canvas } = await import('html2canvas');
@@ -121,6 +120,7 @@ export default function SurveyAnalytics({ survey, items, onError }) {
           allowTaint: true,
           backgroundColor: '#ffffff',
           scale: 2,
+          logging: false,
         });
         overview = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
       }

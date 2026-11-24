@@ -102,8 +102,18 @@ export function mapSurveyToPptxSlots(survey, items) {
     return q ? byId.get(q.id) : null;
   };
 
-  const gender = take((t) => /(^|[^а-яё])пол([^а-яё]|$)/i.test(t) && !/положен/i.test(t));
-  const age = take((t) => /возраст/i.test(t));
+  const gender =
+    take((t) => /(^|[^а-яё])пол([^а-яё]|$)/i.test(t) && !/положен/i.test(t)) ||
+    charts.find((c) => {
+      const labels = (c.slices || []).map((s) => s.label.toLowerCase());
+      return labels.some((l) => /муж/i.test(l)) && labels.some((l) => /жен/i.test(l));
+    });
+  const age =
+    take((t) => /возраст/i.test(t)) ||
+    charts.find((c) => {
+      const labels = (c.slices || []).map((s) => s.label.toLowerCase()).join(' ');
+      return /\d+\s*[-–]\s*\d+/.test(labels) && /лет/i.test(labels);
+    });
   const profession = take((t) => /професс|род\s*занят|занятост|кем\s*работа/i.test(t));
   const industry = take((t) => /отрасл|сфера\s*занят|вид\s*деятельн|в\s*какой\s*сфере/i.test(t));
   const overall = take((t) => /ситуаци/i.test(t) && /(округ|муницип|общ)/i.test(t));
@@ -157,14 +167,87 @@ function buildNumCache(values, formatCode = '0%') {
   return `<c:numCache><c:formatCode>${formatCode}</c:formatCode><c:ptCount val="${values.length}"/>${pts}</c:numCache>`;
 }
 
-function patchSingleSeriesChart(xml, labels, values) {
+function patchFormulaRange(block, col, n) {
+  const start = `Лист1!$${col}$2`;
+  const ranged = n > 1 ? `${start}:$${col}$${n + 1}` : start;
+  return block
+    .replace(new RegExp(`Лист1!\\$${col}\\$2:\\$${col}\\$\\d+`, 'g'), ranged)
+    .replace(new RegExp(`Лист1!\\$${col}\\$2(?!:)`, 'g'), ranged);
+}
+
+/** Patch category + value caches only (do not touch series title strCache). */
+function patchSingleSeriesChart(xml, labels, values, seriesTitle = '') {
   let out = xml;
   const n = labels.length;
-  out = out.replace(/<c:strCache>[\s\S]*?<\/c:strCache>/, buildStrCache(labels));
-  out = out.replace(/<c:numCache>[\s\S]*?<\/c:numCache>/, buildNumCache(values));
-  out = out.replace(/Лист1!\$A\$2:\$A\$\d+/g, n > 1 ? `Лист1!$A$2:$A$${n + 1}` : 'Лист1!$A$2');
-  out = out.replace(/Лист1!\$B\$2:\$B\$\d+/g, n > 1 ? `Лист1!$B$2:$B$${n + 1}` : 'Лист1!$B$2');
+  out = out.replace(/<c:cat>[\s\S]*?<\/c:cat>/, (block) => {
+    let next = block.replace(/<c:strCache>[\s\S]*?<\/c:strCache>/, buildStrCache(labels));
+    next = patchFormulaRange(next, 'A', n);
+    return next;
+  });
+  out = out.replace(/<c:val>[\s\S]*?<\/c:val>/, (block) => {
+    let next = block.replace(/<c:numCache>[\s\S]*?<\/c:numCache>/, buildNumCache(values));
+    next = patchFormulaRange(next, 'B', n);
+    return next;
+  });
+  // Normalize broken multi-point series titles in pie charts.
+  out = out.replace(/<c:tx>[\s\S]*?<\/c:tx>/, (block) => {
+    const title = seriesTitle || 'Ряд 1';
+    return block.replace(/<c:strCache>[\s\S]*?<\/c:strCache>/, buildStrCache([title]));
+  });
   return out;
+}
+
+function readPngSize(bytes) {
+  if (!bytes || bytes.length < 24) return null;
+  const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  // PNG signature + IHDR
+  if (u8[0] !== 0x89 || u8[1] !== 0x50) return null;
+  const view = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  return { width: view.getUint32(16), height: view.getUint32(20) };
+}
+
+/** Center-crop srcRect so stretched fill keeps correct aspect ratio in the slot. */
+function srcRectForSlot(imgW, imgH, slotCx, slotCy) {
+  if (!imgW || !imgH || !slotCx || !slotCy) return { l: 0, t: 0, r: 0, b: 0 };
+  const imgAr = imgW / imgH;
+  const slotAr = slotCx / slotCy;
+  const pct = (x) => Math.max(0, Math.min(50000, Math.round(x * 100000)));
+  if (imgAr > slotAr) {
+    const visible = imgH * slotAr;
+    const side = (imgW - visible) / imgW / 2;
+    return { l: pct(side), t: 0, r: pct(side), b: 0 };
+  }
+  const visible = imgW / slotAr;
+  const side = (imgH - visible) / imgH / 2;
+  return { l: 0, t: pct(side), r: 0, b: pct(side) };
+}
+
+function applyMapSrcRects(slideXml, imgSize) {
+  if (!imgSize?.width || !imgSize?.height) return slideXml;
+  return slideXml.replace(/<p:pic>[\s\S]*?<\/p:pic>/g, (pic) => {
+    const name = pic.match(/<p:cNvPr[^>]*name="([^"]+)"/)?.[1] || '';
+    if (/герб/i.test(name)) return pic;
+    const ext = pic.match(/<a:ext[^>]*cx="(\d+)"[^>]*cy="(\d+)"/);
+    if (!ext) return pic;
+    const rect = srcRectForSlot(
+      imgSize.width,
+      imgSize.height,
+      Number(ext[1]),
+      Number(ext[2])
+    );
+    const srcRect = `<a:srcRect l="${rect.l}" t="${rect.t}" r="${rect.r}" b="${rect.b}"/>`;
+    if (/<a:srcRect\b/.test(pic)) {
+      return pic.replace(/<a:srcRect\b[^/]*\/>/, srcRect);
+    }
+    // Prefer after blip, before stretch/fillRect
+    if (/<a:blip\b[^/]*\/>/.test(pic)) {
+      return pic.replace(/(<a:blip\b[^/]*\/>)/, `$1${srcRect}`);
+    }
+    if (/<a:blip\b[\s\S]*?<\/a:blip>/.test(pic)) {
+      return pic.replace(/(<\/a:blip>)/, `$1${srcRect}`);
+    }
+    return pic;
+  });
 }
 
 function patchMultiSeriesChart(xml, seriesRows, categoryLabel) {
@@ -333,7 +416,7 @@ function setOtherTexts(slideXml, rows) {
   return slideXml.replace(/Другое\s*:\s*/g, `Другое: ${escapeXml(joined)}`);
 }
 
-async function applyChart(zip, chartFile, rows, mode, categoryLabel) {
+async function applyChart(zip, chartFile, rows, mode, categoryLabel, seriesTitle = '') {
   const path = `ppt/charts/${chartFile}`;
   const file = zip.file(path);
   if (!file) return;
@@ -348,7 +431,8 @@ async function applyChart(zip, chartFile, rows, mode, categoryLabel) {
       : patchSingleSeriesChart(
           xml,
           rows.map((r) => r.label),
-          rows.map((r) => r.share)
+          rows.map((r) => r.share),
+          seriesTitle
         );
   zip.file(path, xml);
 }
@@ -392,6 +476,7 @@ export async function buildAnalyticsPptxBuffer({
     (await toBytes(mapImages.overview)) ||
     (await toBytes(mapImages.overviewAlt)) ||
     (await toBytes((mapImages.zooms || [])[0]));
+  const mapSize = overview ? readPngSize(overview) : null;
   if (overview) {
     zip.file('ppt/media/image2.png', overview);
   }
@@ -415,23 +500,25 @@ export async function buildAnalyticsPptxBuffer({
     await patchSlide(zip, n, (s) => replaceContextParen(s, ctx));
   }
 
-  // Clear leftover geo-comment / frame hints if any remain
+  // Clear leftover geo-comment / frame hints; crop map pics to slot aspect ratio
   for (const n of [2, 3, 4]) {
-    await patchSlide(zip, n, (s) =>
-      clearAllMatchingText(s, [
+    await patchSlide(zip, n, (s) => {
+      let out = clearAllMatchingText(s, [
         'Комментарий в случае проблем',
         'рамку после',
         'Общее фото карты',
         'Приближенное фото',
         'Фото карты территории',
-      ])
-    );
+      ]);
+      out = applyMapSrcRects(out, mapSize);
+      return out;
+    });
   }
 
   // --- Charts ---
-  await applyChart(zip, 'chart1.xml', chartRowsFromQuestion(slots.gender), 'single');
-  await applyChart(zip, 'chart2.xml', chartRowsFromQuestion(slots.age), 'single');
-  await applyChart(zip, 'chart3.xml', chartRowsFromQuestion(slots.profession), 'single');
+  await applyChart(zip, 'chart1.xml', chartRowsFromQuestion(slots.gender), 'single', null, 'Пол');
+  await applyChart(zip, 'chart2.xml', chartRowsFromQuestion(slots.age), 'single', null, 'Возраст');
+  await applyChart(zip, 'chart3.xml', chartRowsFromQuestion(slots.profession), 'single', null, 'Профиль');
   await applyChart(
     zip,
     'chart4.xml',
