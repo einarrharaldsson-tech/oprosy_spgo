@@ -360,6 +360,15 @@ const hasSlide3 = !!zip.file('ppt/slides/slide3.xml');
 const hasSlide6 = !!zip.file('ppt/slides/slide6.xml');
 const media = Object.keys(zip.files).filter((f) => f.startsWith('ppt/media/'));
 const chart1 = await zip.file('ppt/charts/chart1.xml').async('string');
+const emb1 = await zip.file('ppt/embeddings/Microsoft_Excel_Worksheet.xlsx').async('nodebuffer');
+const embZip = await JSZip.loadAsync(emb1);
+const embSheet = await embZip.file('xl/worksheets/sheet1.xml').async('string');
+const embSst = await embZip.file('xl/sharedStrings.xml').async('string');
+const embVals = [...embSheet.matchAll(/<c r="B(\d+)"[^>]*><v>([^<]*)<\/v>/g)].map((m) => ({
+  row: Number(m[1]),
+  v: m[2],
+}));
+const embLabels = [...embSst.matchAll(/<t[^>]*>([^<]*)<\/t>/g)].map((m) => m[1]);
 
 console.log(
   JSON.stringify(
@@ -375,6 +384,9 @@ console.log(
       contextGeo: (await zip.file('ppt/slides/slide2.xml').async('string')).includes('опрошено'),
       mediaCount: media.length,
       chart1HasMale: chart1.includes('Мужской'),
+      embGenderLabels: embLabels,
+      embGenderValues: embVals,
+      embeddingNotTemplate46: !embVals.some((c) => c.row >= 2 && c.v === '0.46'),
     },
     null,
     2

@@ -416,6 +416,147 @@ function setOtherTexts(slideXml, rows) {
   return slideXml.replace(/Другое\s*:\s*/g, `Другое: ${escapeXml(joined)}`);
 }
 
+function colLetter(index0) {
+  let n = index0;
+  let s = '';
+  do {
+    s = String.fromCharCode(65 + (n % 26)) + s;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return s;
+}
+
+function buildSstXml(strings) {
+  const items = strings
+    .map((t) => {
+      const text = String(t ?? '');
+      const needsSpace = text !== text.trim() || text === '';
+      const attrs = needsSpace ? ' xml:space="preserve"' : '';
+      return `<si><t${attrs}>${escapeXml(text || ' ')}</t></si>`;
+    })
+    .join('');
+  return (
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+    `<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${strings.length}" uniqueCount="${strings.length}">` +
+    `${items}</sst>`
+  );
+}
+
+function styleAttrFromSample(sheetXml, preferNumeric = true) {
+  if (preferNumeric) {
+    const m = sheetXml.match(/<c r="B\d+" s="(\d+)"/);
+    if (m) return ` s="${m[1]}"`;
+  }
+  return '';
+}
+
+/** PowerPoint redraws charts from embedded xlsx — caches alone are not enough. */
+async function patchChartEmbedding(pptxZip, chartFile, payload) {
+  const relsPath = `ppt/charts/_rels/${chartFile}.rels`;
+  const rels = await readText(pptxZip, relsPath);
+  if (!rels) return;
+  const embName = rels.match(/Target="\.\.\/embeddings\/([^"]+)"/)?.[1];
+  if (!embName) return;
+  const embPath = `ppt/embeddings/${embName}`;
+  const embFile = pptxZip.file(embPath);
+  if (!embFile) return;
+
+  const xlsx = await JSZip.loadAsync(await embFile.async('uint8array'));
+  const sheetPath = 'xl/worksheets/sheet1.xml';
+  const sheetXml = (await xlsx.file(sheetPath)?.async('string')) || '';
+  if (!sheetXml) return;
+
+  const numStyle = styleAttrFromSample(sheetXml, true);
+  let strings;
+  let sheetData;
+  let tableRef;
+
+  if (payload.mode === 'multi') {
+    const series = payload.seriesRows || [];
+    const cat = payload.categoryLabel || '';
+    strings = [' ', ...series.map((r) => r.label)];
+    const headerCells = [
+      `<c r="A1" t="s"><v>0</v></c>`,
+      ...series.map(
+        (_, i) => `<c r="${colLetter(i + 1)}1" t="s"><v>${i + 1}</v></c>`
+      ),
+    ].join('');
+    const valueCells = [
+      `<c r="A2" t="s"><v>${strings.length}</v></c>`,
+      ...series.map(
+        (r, i) =>
+          `<c r="${colLetter(i + 1)}2"${numStyle}><v>${Number(r.share)}</v></c>`
+      ),
+    ].join('');
+    // category label is last shared string
+    strings.push(cat);
+    const lastCol = colLetter(series.length);
+    tableRef = `A1:${lastCol}2`;
+    sheetData =
+      `<sheetData>` +
+      `<row r="1" spans="1:${series.length + 1}">${headerCells}</row>` +
+      `<row r="2" spans="1:${series.length + 1}">${valueCells}</row>` +
+      `</sheetData>`;
+  } else {
+    const labels = payload.labels || [];
+    const values = payload.values || [];
+    const title = payload.seriesTitle || 'Ряд 1';
+    strings = [' ', title, ...labels];
+    const rowsXml = [
+      `<row r="1" spans="1:2"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row>`,
+      ...labels.map(
+        (label, i) =>
+          `<row r="${i + 2}" spans="1:2">` +
+          `<c r="A${i + 2}" t="s"><v>${i + 2}</v></c>` +
+          `<c r="B${i + 2}"${numStyle}><v>${Number(values[i] ?? 0)}</v></c>` +
+          `</row>`
+      ),
+    ].join('');
+    tableRef = `A1:B${labels.length + 1}`;
+    sheetData = `<sheetData>${rowsXml}</sheetData>`;
+  }
+
+  let nextSheet = sheetXml.replace(/<sheetData>[\s\S]*?<\/sheetData>/, sheetData);
+  nextSheet = nextSheet.replace(
+    /<dimension[^/]*\/>/,
+    `<dimension ref="${tableRef}"/>`
+  );
+  xlsx.file(sheetPath, nextSheet);
+  xlsx.file('xl/sharedStrings.xml', buildSstXml(strings));
+
+  const tableFile = xlsx.file('xl/tables/table1.xml');
+  if (tableFile) {
+    let tableXml = await tableFile.async('string');
+    tableXml = tableXml.replace(/ref="[^"]+"/, `ref="${tableRef}"`);
+    tableXml = tableXml.replace(
+      /(<autoFilter[^>]*ref=")[^"]+(")/,
+      `$1${tableRef}$2`
+    );
+    // Keep 2-column table headers in sync for single-series charts
+    if (payload.mode !== 'multi') {
+      const title = escapeXml(payload.seriesTitle || 'Ряд 1');
+      tableXml = tableXml.replace(
+        /(<tableColumn id="2"[^>]*name=")[^"]*(")/,
+        `$1${title}$2`
+      );
+    }
+    xlsx.file('xl/tables/table1.xml', tableXml);
+  }
+
+  const out = await xlsx.generateAsync({ type: 'uint8array' });
+  pptxZip.file(embPath, out);
+}
+
+/** Prefer template gender order so slice colors stay consistent. */
+function orderGenderRows(rows) {
+  if (!rows?.length) return rows;
+  const male = rows.find((r) => /муж/i.test(r.label));
+  const female = rows.find((r) => /жен/i.test(r.label));
+  if (!male || !female) return rows;
+  const rest = rows.filter((r) => r !== male && r !== female);
+  return [male, female, ...rest];
+}
+
 async function applyChart(zip, chartFile, rows, mode, categoryLabel, seriesTitle = '') {
   const path = `ppt/charts/${chartFile}`;
   const file = zip.file(path);
@@ -425,15 +566,24 @@ async function applyChart(zip, chartFile, rows, mode, categoryLabel, seriesTitle
     zip.file(path, xml);
     return;
   }
-  xml =
-    mode === 'multi'
-      ? patchMultiSeriesChart(xml, rows, categoryLabel)
-      : patchSingleSeriesChart(
-          xml,
-          rows.map((r) => r.label),
-          rows.map((r) => r.share),
-          seriesTitle
-        );
+  if (mode === 'multi') {
+    xml = patchMultiSeriesChart(xml, rows, categoryLabel);
+    await patchChartEmbedding(zip, chartFile, {
+      mode: 'multi',
+      seriesRows: rows,
+      categoryLabel,
+    });
+  } else {
+    const labels = rows.map((r) => r.label);
+    const values = rows.map((r) => r.share);
+    xml = patchSingleSeriesChart(xml, labels, values, seriesTitle);
+    await patchChartEmbedding(zip, chartFile, {
+      mode: 'single',
+      labels,
+      values,
+      seriesTitle,
+    });
+  }
   zip.file(path, xml);
 }
 
@@ -516,7 +666,14 @@ export async function buildAnalyticsPptxBuffer({
   }
 
   // --- Charts ---
-  await applyChart(zip, 'chart1.xml', chartRowsFromQuestion(slots.gender), 'single', null, 'Пол');
+  await applyChart(
+    zip,
+    'chart1.xml',
+    orderGenderRows(chartRowsFromQuestion(slots.gender)),
+    'single',
+    null,
+    'Пол'
+  );
   await applyChart(zip, 'chart2.xml', chartRowsFromQuestion(slots.age), 'single', null, 'Возраст');
   await applyChart(zip, 'chart3.xml', chartRowsFromQuestion(slots.profession), 'single', null, 'Профиль');
   await applyChart(
