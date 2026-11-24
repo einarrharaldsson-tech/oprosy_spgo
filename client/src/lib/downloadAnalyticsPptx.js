@@ -62,7 +62,7 @@ function escapeXml(s) {
     .replace(/"/g, '&quot;');
 }
 
-function slicesToRows(slices, { dropZero = true, otherLast = true } = {}) {
+function slicesToRows(slices, { dropZero = true, otherLast = true, sortByShare = true } = {}) {
   let rows = (slices || [])
     .filter((s) => s.id !== 'unanswered')
     .map((s) => {
@@ -76,6 +76,7 @@ function slicesToRows(slices, { dropZero = true, otherLast = true } = {}) {
       };
     });
   if (dropZero) rows = rows.filter((r) => r.share > 0 || r.count > 0);
+  if (!sortByShare) return rows;
   if (otherLast) {
     const other = rows.filter((r) => r.isOther);
     const rest = rows.filter((r) => !r.isOther).sort((a, b) => b.share - a.share);
@@ -86,64 +87,107 @@ function slicesToRows(slices, { dropZero = true, otherLast = true } = {}) {
   return rows;
 }
 
-function chartRowsFromQuestion(chart) {
+function chartRowsFromQuestion(chart, opts = {}) {
   if (!chart) return [];
-  return slicesToRows(chart.slices || []);
+  return slicesToRows(chart.slices || [], opts);
 }
 
-/** Heuristic mapping of survey questions → template slots. */
+function normLabel(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[^a-zа-я0-9]+/gi, ' ')
+    .trim();
+}
+
+function labelsMatch(a, b) {
+  const x = normLabel(a);
+  const y = normLabel(b);
+  if (!x || !y) return false;
+  return x === y || x.includes(y) || y.includes(x);
+}
+
+/**
+ * Map survey choice questions → PPTX chart slots.
+ * For the November problematika questionnaire, match by known stems
+ * (real wording differs from generic heuristics).
+ */
 export function mapSurveyToPptxSlots(survey, items) {
   const charts = buildQuestionCharts(survey?.questions || [], items);
-  const byId = new Map(charts.map((c) => [c.questionId, c]));
+  const byId = new Map(charts.map((c) => [Number(c.questionId), c]));
   const questions = (survey?.questions || []).filter(isChoiceQuestion);
 
   const take = (pred) => {
     const q = questions.find((question) => pred(String(question.text || ''), question));
-    return q ? byId.get(q.id) : null;
+    return q ? byId.get(Number(q.id)) : null;
   };
 
+  // Real problematika stems (survey id 12+ copies).
   const gender =
-    take((t) => /(^|[^а-яё])пол([^а-яё]|$)/i.test(t) && !/положен/i.test(t)) ||
+    take((t) => /^\s*пол\b/i.test(t) && !/положен/i.test(t)) ||
+    take((t) => /(^|[^а-яё])пол([^а-яё]|$)/i.test(t) && !/положен|полных\s+лет/i.test(t)) ||
     charts.find((c) => {
       const labels = (c.slices || []).map((s) => s.label.toLowerCase());
       return labels.some((l) => /муж/i.test(l)) && labels.some((l) => /жен/i.test(l));
     });
+
   const age =
-    take((t) => /возраст/i.test(t)) ||
+    take((t) => /сколько\s+вам\s+полных\s+лет|возраст/i.test(t)) ||
     charts.find((c) => {
       const labels = (c.slices || []).map((s) => s.label.toLowerCase()).join(' ');
       return /\d+\s*[-–]\s*\d+/.test(labels) && /лет/i.test(labels);
     });
-  const profession = take((t) => /професс|род\s*занят|занятост|кем\s*работа/i.test(t));
-  const industry = take((t) => /отрасл|сфера\s*занят|вид\s*деятельн|в\s*какой\s*сфере/i.test(t));
-  const overall = take((t) => /ситуаци/i.test(t) && /(округ|муницип|общ)/i.test(t));
-  const head = take((t) => /глав[аые]|оцен.*руковод/i.test(t));
-  const sources = take((t) => /источник|информир|откуда.*узна|получаете.*информац/i.test(t));
+
+  const profession = take((t) => /основное\s+занятие|професс|род\s*занят|занятост|кем\s*работа/i.test(t));
+  const industry = take((t) => /в\s+какой\s+сфере\s+вы\s+работа|отрасл|сфера\s*занят|вид\s*деятельн/i.test(t));
+  const overall = take(
+    (t) =>
+      /довольн\w*\s+или\s+не\s+довольн|положением\s+дел\s+в\s+вашем\s+округе|общ\w*\s+ситуаци/i.test(t) &&
+      !/сфер[еы]/i.test(t)
+  );
+  const head = take((t) => /деятельност\w*\s+глав|глав[аые]\s+муницип|оцен.*руковод/i.test(t));
+  const sources = take((t) => /источник\w*\s+вы\s+преимуществен|источник|информир|получаете.*информац/i.test(t));
 
   const used = new Set(
     [gender, age, profession, industry, overall, head, sources]
       .filter(Boolean)
-      .map((c) => c.questionId)
+      .map((c) => Number(c.questionId))
   );
 
-  const sphereCharts = charts.filter((c) => {
-    if (used.has(c.questionId)) return false;
-    const labels = (c.slices || []).map((s) => s.label.toLowerCase()).join(' ');
-    return /удовлетвор/.test(labels);
-  });
+  // Sphere satisfaction: «Вы удовлетворены … в сфере X» (not «Что Вас не устраивает»).
+  const sphereCharts = questions
+    .filter((q) => {
+      if (used.has(Number(q.id))) return false;
+      const t = String(q.text || '');
+      return /удовлетворен/i.test(t) && /сфер/i.test(t) && !/не\s+устраивает/i.test(t);
+    })
+    .map((q) => byId.get(Number(q.id)))
+    .filter(Boolean);
 
-  const interaction = charts.filter((c) => {
-    if (used.has(c.questionId)) return false;
-    if (sphereCharts.some((s) => s.questionId === c.questionId)) return false;
-    const t = String(c.questionText || '');
-    return /мероприят|встречу|выездн|администрац|участвовать|взаимодейств/i.test(t);
-  });
+  const sphereIds = new Set(sphereCharts.map((c) => Number(c.questionId)));
+
+  const interactionPreds = [
+    (t) => /проводились\s+ли\s+местной\s+администрацией|мероприятия,\s*встречи\s+с\s+жителями/i.test(t),
+    (t) => /необходимы\s+ли\s+такие\s+мероприятия/i.test(t),
+    (t) => /готовы\s+ли\s+вы\s+сами\s+принимать\s+участие/i.test(t),
+    (t) => /выездн[а-яё]*\s+администраци/i.test(t),
+  ];
+  const interactionTaken = new Set();
+  const interaction = interactionPreds
+    .map((pred) => {
+      const ch = take(pred);
+      if (!ch) return null;
+      const id = Number(ch.questionId);
+      if (used.has(id) || sphereIds.has(id) || interactionTaken.has(id)) return null;
+      interactionTaken.add(id);
+      return ch;
+    })
+    .filter(Boolean);
 
   return {
     charts,
     gender,
     age,
-    // Fixed template keeps a single professional-profile chart (industry/occupation mix).
     profession: industry || profession,
     overall,
     head,
@@ -153,47 +197,37 @@ export function mapSurveyToPptxSlots(survey, items) {
   };
 }
 
-function buildStrCache(labels) {
-  const pts = labels
+function buildStrPts(labels) {
+  return labels
     .map((label, idx) => `<c:pt idx="${idx}"><c:v>${escapeXml(label)}</c:v></c:pt>`)
     .join('');
-  return `<c:strCache><c:ptCount val="${labels.length}"/>${pts}</c:strCache>`;
 }
 
-function buildNumCache(values, formatCode = '0%') {
-  const pts = values
+function buildNumPts(values) {
+  return values
     .map((v, idx) => `<c:pt idx="${idx}"><c:v>${Number(v)}</c:v></c:pt>`)
     .join('');
-  return `<c:numCache><c:formatCode>${formatCode}</c:formatCode><c:ptCount val="${values.length}"/>${pts}</c:numCache>`;
 }
 
-function patchFormulaRange(block, col, n) {
-  const start = `Лист1!$${col}$2`;
-  const ranged = n > 1 ? `${start}:$${col}$${n + 1}` : start;
-  return block
-    .replace(new RegExp(`Лист1!\\$${col}\\$2:\\$${col}\\$\\d+`, 'g'), ranged)
-    .replace(new RegExp(`Лист1!\\$${col}\\$2(?!:)`, 'g'), ranged);
+/** Literal category/values — viewers cannot fall back to stale Excel/cache. */
+function buildCatLit(labels) {
+  return `<c:cat><c:strLit><c:ptCount val="${labels.length}"/>${buildStrPts(labels)}</c:strLit></c:cat>`;
 }
 
-/** Patch category + value caches only (do not touch series title strCache). */
+function buildValLit(values, formatCode = '0%') {
+  return `<c:val><c:numLit><c:formatCode>${formatCode}</c:formatCode><c:ptCount val="${values.length}"/>${buildNumPts(values)}</c:numLit></c:val>`;
+}
+
+function buildTxLit(title) {
+  return `<c:tx><c:strLit><c:ptCount val="1"/><c:pt idx="0"><c:v>${escapeXml(title || 'Ряд 1')}</c:v></c:pt></c:strLit></c:tx>`;
+}
+
+/** Patch single-series chart with embedded literal data (ignore Excel). */
 function patchSingleSeriesChart(xml, labels, values, seriesTitle = '') {
   let out = xml;
-  const n = labels.length;
-  out = out.replace(/<c:cat>[\s\S]*?<\/c:cat>/, (block) => {
-    let next = block.replace(/<c:strCache>[\s\S]*?<\/c:strCache>/, buildStrCache(labels));
-    next = patchFormulaRange(next, 'A', n);
-    return next;
-  });
-  out = out.replace(/<c:val>[\s\S]*?<\/c:val>/, (block) => {
-    let next = block.replace(/<c:numCache>[\s\S]*?<\/c:numCache>/, buildNumCache(values));
-    next = patchFormulaRange(next, 'B', n);
-    return next;
-  });
-  // Normalize broken multi-point series titles in pie charts.
-  out = out.replace(/<c:tx>[\s\S]*?<\/c:tx>/, (block) => {
-    const title = seriesTitle || 'Ряд 1';
-    return block.replace(/<c:strCache>[\s\S]*?<\/c:strCache>/, buildStrCache([title]));
-  });
+  out = out.replace(/<c:tx>[\s\S]*?<\/c:tx>/, buildTxLit(seriesTitle || 'Ряд 1'));
+  out = out.replace(/<c:cat>[\s\S]*?<\/c:cat>/, buildCatLit(labels));
+  out = out.replace(/<c:val>[\s\S]*?<\/c:val>/, buildValLit(values));
   return out;
 }
 
@@ -250,32 +284,38 @@ function applyMapSrcRects(slideXml, imgSize) {
   });
 }
 
+/** Align survey rows to existing series titles in the template chart. */
+function alignRowsToSeries(xml, seriesRows) {
+  const titles = [...xml.matchAll(/<c:ser>[\s\S]*?<c:tx>[\s\S]*?<c:v>([^<]*)<\/c:v>/g)].map(
+    (m) => m[1]
+  );
+  if (!titles.length) return seriesRows;
+  const used = new Set();
+  return titles.map((title) => {
+    const idx = seriesRows.findIndex((r, i) => !used.has(i) && labelsMatch(r.label, title));
+    if (idx >= 0) {
+      used.add(idx);
+      return seriesRows[idx];
+    }
+    return { label: title, share: 0, count: 0 };
+  });
+}
+
 function patchMultiSeriesChart(xml, seriesRows, categoryLabel) {
   let out = xml;
+  const aligned = alignRowsToSeries(out, seriesRows);
   const serBlocks = [...out.matchAll(/<c:ser>[\s\S]*?<\/c:ser>/g)].map((m) => m[0]);
   if (!serBlocks.length) return out;
 
   for (let i = 0; i < serBlocks.length; i += 1) {
     const block = serBlocks[i];
-    const row = seriesRows[i];
+    const row = aligned[i];
+    const share = row ? Number(row.share) : 0;
+    const label = row?.label || `Ряд ${i + 1}`;
     let next = block;
-    if (!row) {
-      next = next.replace(/(<c:numCache>[\s\S]*?<c:v>)([^<]*)(<\/c:v>)/, '$10$3');
-      out = out.replace(block, next);
-      continue;
-    }
-    next = next.replace(
-      /(<c:tx>[\s\S]*?<c:strCache>[\s\S]*?<c:v>)([^<]*)(<\/c:v>)/,
-      `$1${escapeXml(row.label)}$3`
-    );
-    next = next.replace(
-      /(<c:cat>[\s\S]*?<c:strCache>[\s\S]*?<c:v>)([^<]*)(<\/c:v>)/,
-      `$1${escapeXml(categoryLabel)}$3`
-    );
-    next = next.replace(
-      /(<c:numCache>[\s\S]*?<c:v>)([^<]*)(<\/c:v>)/,
-      `$1${Number(row.share)}$3`
-    );
+    next = next.replace(/<c:tx>[\s\S]*?<\/c:tx>/, buildTxLit(label));
+    next = next.replace(/<c:cat>[\s\S]*?<\/c:cat>/, buildCatLit([categoryLabel || '']));
+    next = next.replace(/<c:val>[\s\S]*?<\/c:val>/, buildValLit([share]));
     out = out.replace(block, next);
   }
   return out;
@@ -562,17 +602,18 @@ async function applyChart(zip, chartFile, rows, mode, categoryLabel, seriesTitle
   const file = zip.file(path);
   if (!file) return;
   let xml = await file.async('string');
-  if (!rows?.length) {
-    zip.file(path, xml);
-    return;
-  }
+  const safeRows = rows?.length ? rows : [];
   if (mode === 'multi') {
-    xml = patchMultiSeriesChart(xml, rows, categoryLabel);
+    const aligned = alignRowsToSeries(xml, safeRows);
+    xml = patchMultiSeriesChart(xml, safeRows, categoryLabel);
     await patchChartEmbedding(zip, chartFile, {
       mode: 'multi',
-      seriesRows: rows,
+      seriesRows: aligned,
       categoryLabel,
     });
+  } else if (!safeRows.length) {
+    zip.file(path, xml);
+    return;
   } else {
     const labels = rows.map((r) => r.label);
     const values = rows.map((r) => r.share);
@@ -669,21 +710,34 @@ export async function buildAnalyticsPptxBuffer({
   await applyChart(
     zip,
     'chart1.xml',
-    orderGenderRows(chartRowsFromQuestion(slots.gender)),
+    orderGenderRows(chartRowsFromQuestion(slots.gender, { sortByShare: false })),
     'single',
     null,
     'Пол'
   );
-  await applyChart(zip, 'chart2.xml', chartRowsFromQuestion(slots.age), 'single', null, 'Возраст');
+  await applyChart(
+    zip,
+    'chart2.xml',
+    chartRowsFromQuestion(slots.age, { sortByShare: false }),
+    'single',
+    null,
+    'Возраст'
+  );
   await applyChart(zip, 'chart3.xml', chartRowsFromQuestion(slots.profession), 'single', null, 'Профиль');
   await applyChart(
     zip,
     'chart4.xml',
-    chartRowsFromQuestion(slots.overall),
+    chartRowsFromQuestion(slots.overall, { sortByShare: false }),
     'multi',
     quarterRoman
   );
-  await applyChart(zip, 'chart5.xml', chartRowsFromQuestion(slots.head), 'multi', quarterRoman);
+  await applyChart(
+    zip,
+    'chart5.xml',
+    chartRowsFromQuestion(slots.head, { sortByShare: false }),
+    'multi',
+    quarterRoman
+  );
 
   for (let i = 0; i < 3; i += 1) {
     const slideNum = 8 + i;

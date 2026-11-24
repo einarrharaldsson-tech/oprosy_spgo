@@ -114,12 +114,13 @@ const { buildAnalyticsPptxBuffer, analyticsPptxFilename, mapSurveyToPptxSlots } 
 );
 
 const survey = {
-  title: 'Проблематика СПГО',
+  title: 'Опросник по проблематике — ноябрь 2026',
   questions: [
     {
       id: 1,
-      text: 'Ваш пол',
-      answerType: 'select',
+      text: 'Пол.',
+      answerType: 'checkbox',
+      allowMultiple: false,
       options: [
         { id: 1, text: 'Мужской' },
         { id: 2, text: 'Женский' },
@@ -127,19 +128,21 @@ const survey = {
     },
     {
       id: 2,
-      text: 'Ваш возраст',
-      answerType: 'select',
+      text: 'Сколько Вам полных лет?',
+      answerType: 'checkbox',
+      allowMultiple: false,
       options: [
         { id: 1, text: '18-29 лет' },
-        { id: 2, text: '30-44 года' },
+        { id: 2, text: '30-44 лет' },
         { id: 3, text: '45-60 лет' },
         { id: 4, text: '61 год и старше' },
       ],
     },
     {
       id: 3,
-      text: 'Ваш род занятий / профессия',
-      answerType: 'select',
+      text: 'Ваше основное занятие, которое является основным источником Ваших доходов?',
+      answerType: 'checkbox',
+      allowMultiple: false,
       options: [
         { id: 1, text: 'Рабочий' },
         { id: 2, text: 'Офисный работник' },
@@ -149,8 +152,9 @@ const survey = {
     },
     {
       id: 4,
-      text: 'В какой сфере / отрасли вы работаете',
-      answerType: 'select',
+      text: 'В какой сфере Вы работаете?',
+      answerType: 'checkbox',
+      allowMultiple: false,
       options: [
         { id: 1, text: 'Образование' },
         { id: 2, text: 'Здравоохранение' },
@@ -160,8 +164,9 @@ const survey = {
     },
     {
       id: 5,
-      text: 'Как вы оцениваете общую ситуацию в округе',
-      answerType: 'select',
+      text: 'Вы в целом довольны или не довольны положением дел в Вашем округе?',
+      answerType: 'checkbox',
+      allowMultiple: false,
       options: [
         { id: 1, text: 'Скорее доволен' },
         { id: 2, text: 'Скорее не доволен' },
@@ -170,8 +175,9 @@ const survey = {
     },
     {
       id: 6,
-      text: 'Оценка деятельности главы округа',
-      answerType: 'select',
+      text: 'Как Вы оцениваете деятельность главы муниципального образования?',
+      answerType: 'checkbox',
+      allowMultiple: false,
       options: [
         { id: 1, text: 'Скорее положительно' },
         { id: 2, text: 'Скорее отрицательно' },
@@ -180,8 +186,20 @@ const survey = {
     },
     {
       id: 7,
-      text: 'Удовлетворённость сферой ЖКХ',
-      answerType: 'select',
+      text: 'Вы удовлетворены или не удовлетворены положением дел в сфере здравоохранения?',
+      answerType: 'checkbox',
+      allowMultiple: false,
+      options: [
+        { id: 1, text: 'Удовлетворен' },
+        { id: 2, text: 'Не удовлетворен' },
+        { id: 3, text: 'Затрудняюсь ответить' },
+      ],
+    },
+    {
+      id: 8,
+      text: 'Вы удовлетворены или не удовлетворены положением дел в сфере ЖКХ?',
+      answerType: 'checkbox',
+      allowMultiple: false,
       options: [
         { id: 1, text: 'Удовлетворен' },
         { id: 2, text: 'Не удовлетворен' },
@@ -190,19 +208,10 @@ const survey = {
       ],
     },
     {
-      id: 8,
-      text: 'Удовлетворённость сферой образования',
-      answerType: 'select',
-      options: [
-        { id: 1, text: 'Удовлетворен' },
-        { id: 2, text: 'Не удовлетворен' },
-        { id: 3, text: 'Затрудняюсь ответить' },
-      ],
-    },
-    {
       id: 9,
-      text: 'Удовлетворённость сферой здравоохранения',
-      answerType: 'select',
+      text: 'Вы удовлетворены или не удовлетворены положением дел в сфере общественного транспорта?',
+      answerType: 'checkbox',
+      allowMultiple: false,
       options: [
         { id: 1, text: 'Удовлетворен' },
         { id: 2, text: 'Не удовлетворен' },
@@ -211,7 +220,7 @@ const survey = {
     },
     {
       id: 10,
-      text: 'Основные источники информирования',
+      text: 'Какими источниками Вы преимущественно пользуетесь при получении информации о положении дел в Вашем муниципалитете?',
       answerType: 'checkbox',
       allowMultiple: true,
       options: [
@@ -223,8 +232,9 @@ const survey = {
     },
     {
       id: 11,
-      text: 'Проводились ли местной администрацией мероприятия, встречи с жителями',
-      answerType: 'select',
+      text: 'Проводились ли местной администрацией какие -либо мероприятия, встречи с жителями на местах в последнее время?',
+      answerType: 'checkbox',
+      allowMultiple: false,
       options: [
         { id: 1, text: 'Проводились, информирован' },
         { id: 2, text: 'Что-то слышал' },
@@ -234,8 +244,9 @@ const survey = {
     },
     {
       id: 12,
-      text: 'Необходимы ли такие мероприятия',
-      answerType: 'select',
+      text: 'Как Вы считаете, необходимы ли такие мероприятия?',
+      answerType: 'checkbox',
+      allowMultiple: false,
       options: [
         { id: 1, text: 'Да, необходимы' },
         { id: 2, text: 'Нет, не нужны' },
@@ -244,8 +255,9 @@ const survey = {
     },
     {
       id: 13,
-      text: 'Готовы ли Вы сами принимать участие в таких мероприятиях',
-      answerType: 'select',
+      text: 'Готовы ли Вы сами принимать участие в таких мероприятиях?',
+      answerType: 'checkbox',
+      allowMultiple: false,
       options: [
         { id: 1, text: 'Да, обязательно' },
         { id: 2, text: 'Скорее буду' },
@@ -255,8 +267,9 @@ const survey = {
     },
     {
       id: 14,
-      text: 'Знаете ли Вы о таком виде мероприятий как «Выездная Администрация»',
-      answerType: 'select',
+      text: 'Знаете ли Вы о таком виде мероприятий как «Выездная Администрация»?',
+      answerType: 'checkbox',
+      allowMultiple: false,
       options: [
         { id: 1, text: 'Знаю хорошо' },
         { id: 2, text: 'Что-то знаю' },
@@ -271,8 +284,13 @@ function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-const items = Array.from({ length: 40 }, (_, i) => {
+/** Fixed 90/110 gender split like production survey 12 (45% / 55%). */
+const items = Array.from({ length: 200 }, (_, i) => {
+  const genderOpt = i < 90 ? survey.questions[0].options[0] : survey.questions[0].options[1];
   const answers = survey.questions.map((q) => {
+    if (q.id === 1) {
+      return { questionId: q.id, optionId: genderOpt.id, optionText: genderOpt.text };
+    }
     const opt = pick(q.options);
     const a = {
       questionId: q.id,
@@ -282,7 +300,6 @@ const items = Array.from({ length: 40 }, (_, i) => {
     if (/^другое/i.test(opt.text)) a.textValue = `вариант-${i}`;
     return a;
   });
-  // multi for sources: maybe 2 options
   const src = survey.questions.find((q) => q.id === 10);
   const o2 = pick(src.options);
   answers.push({
@@ -384,9 +401,14 @@ console.log(
       contextGeo: (await zip.file('ppt/slides/slide2.xml').async('string')).includes('опрошено'),
       mediaCount: media.length,
       chart1HasMale: chart1.includes('Мужской'),
+      chart1UsesLit: /<c:strLit>/.test(chart1) && /<c:numLit>/.test(chart1),
+      chart1Vals: [...(chart1.match(/<c:val>[\s\S]*?<\/c:val>/)?.[0] || '').matchAll(/<c:v>([^<]*)<\/c:v>/g)].map((m) => m[1]),
+      genderMapped: !!slots.gender && !!slots.age && !!slots.overall && !!slots.head,
+      spheres: slots.spheres.length,
+      interaction: slots.interaction.length,
       embGenderLabels: embLabels,
       embGenderValues: embVals,
-      embeddingNotTemplate46: !embVals.some((c) => c.row >= 2 && c.v === '0.46'),
+      genderIs45_55: embVals.some((c) => c.row === 2 && c.v === '0.45') && embVals.some((c) => c.row === 3 && c.v === '0.55'),
     },
     null,
     2

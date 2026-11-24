@@ -46,9 +46,10 @@ export function buildQuestionCharts(questions, items) {
       }
 
       let unanswered = 0;
+      const qid = Number(question.id);
       for (const item of items) {
         const answers = (item.answers || []).filter(
-          (answer) => answer.questionId === question.id && answer.optionId
+          (answer) => Number(answer.questionId) === qid && answer.optionId
         );
         if (!answers.length) {
           unanswered += 1;
@@ -94,7 +95,7 @@ export function buildQuestionCharts(questions, items) {
       }
 
       return {
-        questionId: question.id,
+        questionId: qid,
         questionText: question.text,
         multiple: isMultiChoice(question),
         totalSessions,
