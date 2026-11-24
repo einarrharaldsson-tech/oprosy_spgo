@@ -401,7 +401,7 @@ console.log(
       contextGeo: (await zip.file('ppt/slides/slide2.xml').async('string')).includes('опрошено'),
       mediaCount: media.length,
       chart1HasMale: chart1.includes('Мужской'),
-      chart1UsesLit: /<c:strLit>/.test(chart1) && /<c:numLit>/.test(chart1),
+      chart1UsesRef: /<c:strRef>/.test(chart1) && /<c:numRef>/.test(chart1) && !/<c:strLit>/.test(chart1),
       chart1Vals: [...(chart1.match(/<c:val>[\s\S]*?<\/c:val>/)?.[0] || '').matchAll(/<c:v>([^<]*)<\/c:v>/g)].map((m) => m[1]),
       genderMapped: !!slots.gender && !!slots.age && !!slots.overall && !!slots.head,
       spheres: slots.spheres.length,

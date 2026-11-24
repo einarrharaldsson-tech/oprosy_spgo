@@ -197,37 +197,78 @@ export function mapSurveyToPptxSlots(survey, items) {
   };
 }
 
-function buildStrPts(labels) {
-  return labels
+function buildStrCache(labels) {
+  const pts = labels
     .map((label, idx) => `<c:pt idx="${idx}"><c:v>${escapeXml(label)}</c:v></c:pt>`)
     .join('');
+  return `<c:strCache><c:ptCount val="${labels.length}"/>${pts}</c:strCache>`;
 }
 
-function buildNumPts(values) {
-  return values
+function buildNumCache(values, formatCode = '0%') {
+  const pts = values
     .map((v, idx) => `<c:pt idx="${idx}"><c:v>${Number(v)}</c:v></c:pt>`)
     .join('');
+  return `<c:numCache><c:formatCode>${formatCode}</c:formatCode><c:ptCount val="${values.length}"/>${pts}</c:numCache>`;
 }
 
-/** Literal category/values — viewers cannot fall back to stale Excel/cache. */
-function buildCatLit(labels) {
-  return `<c:cat><c:strLit><c:ptCount val="${labels.length}"/>${buildStrPts(labels)}</c:strLit></c:cat>`;
+function sheetRange(col, n, startRow = 2) {
+  if (n <= 1) return `Лист1!$${col}$${startRow}`;
+  return `Лист1!$${col}$${startRow}:$${col}$${startRow + n - 1}`;
 }
 
-function buildValLit(values, formatCode = '0%') {
-  return `<c:val><c:numLit><c:formatCode>${formatCode}</c:formatCode><c:ptCount val="${values.length}"/>${buildNumPts(values)}</c:numLit></c:val>`;
+function patchRefFormula(block, col, n, startRow = 2) {
+  return block.replace(/<c:f>[^<]*<\/c:f>/, `<c:f>${sheetRange(col, n, startRow)}</c:f>`);
 }
 
-function buildTxLit(title) {
-  return `<c:tx><c:strLit><c:ptCount val="1"/><c:pt idx="0"><c:v>${escapeXml(title || 'Ряд 1')}</c:v></c:pt></c:strLit></c:tx>`;
+/** Drop data-point styling whose idx is outside the new series length. */
+function trimChartPointExtras(xml, pointCount) {
+  let out = xml;
+  out = out.replace(/<c:dPt>[\s\S]*?<\/c:dPt>/g, (block) => {
+    const idx = Number(block.match(/<c:idx val="(\d+)"/)?.[1]);
+    return Number.isFinite(idx) && idx >= pointCount ? '' : block;
+  });
+  out = out.replace(/<c:dLbl>[\s\S]*?<\/c:dLbl>/g, (block) => {
+    const idx = Number(block.match(/<c:idx val="(\d+)"/)?.[1]);
+    // Keep default (no idx) label settings; drop only indexed labels past the end.
+    if (!/<c:idx /.test(block)) return block;
+    return Number.isFinite(idx) && idx >= pointCount ? '' : block;
+  });
+  return out;
 }
 
-/** Patch single-series chart with embedded literal data (ignore Excel). */
+/**
+ * Keep PowerPoint-compatible strRef/numRef structure (do NOT switch to strLit/numLit:
+ * charts still reference external Excel via c:externalData, and lit+externalData
+ * makes PowerPoint offer to «repair» the file).
+ */
 function patchSingleSeriesChart(xml, labels, values, seriesTitle = '') {
   let out = xml;
-  out = out.replace(/<c:tx>[\s\S]*?<\/c:tx>/, buildTxLit(seriesTitle || 'Ряд 1'));
-  out = out.replace(/<c:cat>[\s\S]*?<\/c:cat>/, buildCatLit(labels));
-  out = out.replace(/<c:val>[\s\S]*?<\/c:val>/, buildValLit(values));
+  const n = labels.length;
+  out = out.replace(/<c:tx>[\s\S]*?<\/c:tx>/, (block) => {
+    const title = seriesTitle || 'Ряд 1';
+    if (/<c:strCache>/.test(block)) {
+      return block.replace(/<c:strCache>[\s\S]*?<\/c:strCache>/, buildStrCache([title]));
+    }
+    // Rare: no cache — insert one after formula if present.
+    if (/<c:strRef>/.test(block)) {
+      return block.replace(
+        /(<c:f>[^<]*<\/c:f>)/,
+        `$1${buildStrCache([title])}`
+      );
+    }
+    return block;
+  });
+  out = out.replace(/<c:cat>[\s\S]*?<\/c:cat>/, (block) => {
+    let next = block.replace(/<c:strCache>[\s\S]*?<\/c:strCache>/, buildStrCache(labels));
+    next = patchRefFormula(next, 'A', n);
+    return next;
+  });
+  out = out.replace(/<c:val>[\s\S]*?<\/c:val>/, (block) => {
+    let next = block.replace(/<c:numCache>[\s\S]*?<\/c:numCache>/, buildNumCache(values));
+    next = patchRefFormula(next, 'B', n);
+    return next;
+  });
+  out = trimChartPointExtras(out, n);
   return out;
 }
 
@@ -313,9 +354,24 @@ function patchMultiSeriesChart(xml, seriesRows, categoryLabel) {
     const share = row ? Number(row.share) : 0;
     const label = row?.label || `Ряд ${i + 1}`;
     let next = block;
-    next = next.replace(/<c:tx>[\s\S]*?<\/c:tx>/, buildTxLit(label));
-    next = next.replace(/<c:cat>[\s\S]*?<\/c:cat>/, buildCatLit([categoryLabel || '']));
-    next = next.replace(/<c:val>[\s\S]*?<\/c:val>/, buildValLit([share]));
+    next = next.replace(/<c:tx>[\s\S]*?<\/c:tx>/, (tx) => {
+      if (/<c:strCache>/.test(tx)) {
+        return tx.replace(/<c:strCache>[\s\S]*?<\/c:strCache>/, buildStrCache([label]));
+      }
+      return tx.replace(/(<c:v>)([^<]*)(<\/c:v>)/, `$1${escapeXml(label)}$3`);
+    });
+    next = next.replace(/<c:cat>[\s\S]*?<\/c:cat>/, (cat) => {
+      let c = cat.replace(/<c:strCache>[\s\S]*?<\/c:strCache>/, buildStrCache([categoryLabel || '']));
+      c = patchRefFormula(c, 'A', 1, 2);
+      return c;
+    });
+    next = next.replace(/<c:val>[\s\S]*?<\/c:val>/, (val) => {
+      let v = val.replace(/<c:numCache>[\s\S]*?<\/c:numCache>/, buildNumCache([share]));
+      // Multi-series values live on row 2 across columns B,C,D...
+      const col = String.fromCharCode(66 + i); // B, C, D...
+      v = v.replace(/<c:f>[^<]*<\/c:f>/, `<c:f>Лист1!$${col}$2</c:f>`);
+      return v;
+    });
     out = out.replace(block, next);
   }
   return out;
@@ -567,13 +623,25 @@ async function patchChartEmbedding(pptxZip, chartFile, payload) {
   const tableFile = xlsx.file('xl/tables/table1.xml');
   if (tableFile) {
     let tableXml = await tableFile.async('string');
-    tableXml = tableXml.replace(/ref="[^"]+"/, `ref="${tableRef}"`);
+    tableXml = tableXml.replace(/ref="A1:[^"]+"/, `ref="${tableRef}"`);
     tableXml = tableXml.replace(
       /(<autoFilter[^>]*ref=")[^"]+(")/,
       `$1${tableRef}$2`
     );
-    // Keep 2-column table headers in sync for single-series charts
-    if (payload.mode !== 'multi') {
+    if (payload.mode === 'multi') {
+      const series = payload.seriesRows || [];
+      const cols = [
+        `<tableColumn id="1" name=" "/>`,
+        ...series.map(
+          (r, i) =>
+            `<tableColumn id="${i + 2}" name="${escapeXml(r.label || `Ряд ${i + 1}`)}"/>`
+        ),
+      ].join('');
+      tableXml = tableXml.replace(
+        /<tableColumns[\s\S]*?<\/tableColumns>/,
+        `<tableColumns count="${series.length + 1}">${cols}</tableColumns>`
+      );
+    } else {
       const title = escapeXml(payload.seriesTitle || 'Ряд 1');
       tableXml = tableXml.replace(
         /(<tableColumn id="2"[^>]*name=")[^"]*(")/,
@@ -583,7 +651,10 @@ async function patchChartEmbedding(pptxZip, chartFile, payload) {
     xlsx.file('xl/tables/table1.xml', tableXml);
   }
 
-  const out = await xlsx.generateAsync({ type: 'uint8array' });
+  const out = await xlsx.generateAsync({
+    type: 'uint8array',
+    compression: 'DEFLATE',
+  });
   pptxZip.file(embPath, out);
 }
 
