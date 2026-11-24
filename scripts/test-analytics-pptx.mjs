@@ -89,9 +89,9 @@ source = source
     "import { isOtherOptionText } from './options';",
     `import { isOtherOptionText } from '${path.join(ROOT, 'client/src/lib/options.js')}';`
   )
-  .replace(
-    "import { buildQuestionCharts, isChoiceQuestion } from './surveyAnalytics';",
-    `import { buildQuestionCharts, isChoiceQuestion } from '${path.join(ROOT, 'client/src/lib/surveyAnalytics.js')}';`
+  .replaceAll(
+    "from './problematikaReport';",
+    `from '${pathToFileURL(path.join(ROOT, 'client/src/lib/problematikaReport.js')).href}';`
   )
   .replace(
     "import templateUrl from '../assets/report/problematika-template.pptx?url';\n",

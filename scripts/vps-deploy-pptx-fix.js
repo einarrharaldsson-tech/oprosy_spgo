@@ -22,6 +22,8 @@ const BACKUP_STAMP = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
 const CODE_FILES = [
   'client/src/components/SurveyAnalytics.jsx',
   'client/src/lib/downloadAnalyticsPptx.js',
+  'client/src/lib/downloadAnalyticsHtml.js',
+  'client/src/lib/problematikaReport.js',
   'client/src/lib/surveyAnalytics.js',
 ];
 

@@ -1,26 +1,8 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import AnalyticsGeoMap from './AnalyticsGeoMap';
 import PieChart from './PieChart';
 import { answerText, formatGeoCoords } from '../lib/responseAnswers';
 import { buildQuestionCharts } from '../lib/surveyAnalytics';
-
-/** PPTX export is limited to this survey for now. */
-const PROBLEMATIKA_PPTX_SURVEY_TITLE = 'Опросник по проблематике — ноябрь 2026';
-
-function normalizeSurveyTitle(title) {
-  return String(title || '')
-    .replace(/[—–−‐-]/g, '-')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
-}
-
-function isProblematikaPptxSurvey(survey) {
-  return (
-    normalizeSurveyTitle(survey?.title) ===
-    normalizeSurveyTitle(PROBLEMATIKA_PPTX_SURVEY_TITLE)
-  );
-}
 
 function countGeoPoints(items) {
   let n = 0;
@@ -36,7 +18,7 @@ export default function SurveyAnalytics({ survey, items, onError }) {
   const reportRef = useRef(null);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [xlsxBusy, setXlsxBusy] = useState(false);
-  const [pptxBusy, setPptxBusy] = useState(false);
+  const [deckBusy, setDeckBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const charts = useMemo(
     () => buildQuestionCharts(survey?.questions || [], items),
@@ -45,8 +27,8 @@ export default function SurveyAnalytics({ survey, items, onError }) {
   const geoCount = useMemo(() => countGeoPoints(items), [items]);
   const questions = survey?.questions || [];
   const canExport = items.length > 0;
-  const canPptx = canExport && isProblematikaPptxSurvey(survey);
-  const exportBusy = pdfBusy || xlsxBusy || pptxBusy;
+  const [canHtmlDeck, setCanHtmlDeck] = useState(false);
+  const exportBusy = pdfBusy || xlsxBusy || deckBusy;
 
   const downloadPdf = async () => {
     if (!reportRef.current) return;
@@ -104,13 +86,21 @@ export default function SurveyAnalytics({ survey, items, onError }) {
     }
   };
 
-  const downloadPptx = async () => {
-    if (!isProblematikaPptxSurvey(survey)) return;
+  useEffect(() => {
+    let cancelled = false;
+    import('../lib/downloadAnalyticsHtml').then((m) => {
+      if (!cancelled) setCanHtmlDeck(canExport && m.isProblematikaPptxSurvey(survey));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [survey, canExport]);
+
+  const downloadHtmlDeck = async () => {
     onError?.('');
-    setPptxBusy(true);
+    setDeckBusy(true);
     try {
-      // Capture only the Leaflet map (not the «Места проведения» card chrome).
-      let overview;
+      let mapImage;
       const mapNode = reportRef.current?.querySelector('.leaflet-container');
       if (mapNode) {
         await new Promise((resolve) => window.setTimeout(resolve, 400));
@@ -122,23 +112,21 @@ export default function SurveyAnalytics({ survey, items, onError }) {
           scale: 2,
           logging: false,
         });
-        overview = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+        mapImage = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
       }
-      const { downloadAnalyticsPptx, analyticsPptxFilename } = await import(
-        '../lib/downloadAnalyticsPptx'
-      );
-      await downloadAnalyticsPptx({
+      const { downloadAnalyticsHtml, analyticsHtmlFilename, isProblematikaPptxSurvey } =
+        await import('../lib/downloadAnalyticsHtml');
+      if (!isProblematikaPptxSurvey(survey)) return;
+      await downloadAnalyticsHtml({
         survey,
         items,
-        mapImages: overview
-          ? { overview, zooms: [overview, overview, overview, overview] }
-          : {},
-        filename: analyticsPptxFilename(),
+        mapImage,
+        filename: analyticsHtmlFilename(),
       });
     } catch (err) {
-      onError?.(err.message || 'Не удалось сформировать презентацию');
+      onError?.(err.message || 'Не удалось сформировать HTML-презентацию');
     } finally {
-      setPptxBusy(false);
+      setDeckBusy(false);
     }
   };
 
@@ -179,15 +167,15 @@ export default function SurveyAnalytics({ survey, items, onError }) {
             >
               {xlsxBusy ? 'Формирование Excel…' : 'Скачать Excel-отчёт'}
             </button>
-            {canPptx && (
+            {canHtmlDeck && (
               <button
                 type="button"
                 className="btn btn-ghost"
                 style={{ minHeight: 36, padding: '0 12px' }}
-                onClick={downloadPptx}
+                onClick={downloadHtmlDeck}
                 disabled={exportBusy}
               >
-                {pptxBusy ? 'Формирование PPTX…' : 'Скачать презентацию'}
+                {deckBusy ? 'Формирование…' : 'Скачать HTML-презентацию'}
               </button>
             )}
           </div>
