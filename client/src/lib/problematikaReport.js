@@ -1,4 +1,4 @@
-import { buildQuestionCharts, isChoiceQuestion } from './surveyAnalytics';
+import { buildQuestionCharts, isChoiceQuestion } from './surveyAnalytics.js';
 
 export const DISTRICT_FULL = 'Сергиево - Посадский городской округ';
 export const DISTRICT_CODE = 'СПГО';
