@@ -107,13 +107,14 @@ function barList(rows) {
 function slide(num, title, body, ctx) {
   return (
     `<section class="slide" data-slide="${num}">` +
+    `<div class="slide-scale">` +
     `<header class="slide-head">` +
     `<div class="slide-num">${num}</div>` +
     `<div class="slide-titles"><h2>${escapeHtml(title)}</h2>` +
     (ctx ? `<p class="ctx">${escapeHtml(ctx)}</p>` : '') +
     `</div></header>` +
     `<div class="slide-body">${body}</div>` +
-    `</section>`
+    `</div></section>`
   );
 }
 
@@ -157,8 +158,11 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
   margin: 0 0 28px;
   min-height: 640px;
   box-shadow: 0 8px 28px rgba(15,61,62,0.06);
-  break-after: page;
-  page-break-after: always;
+  overflow: hidden;
+}
+.slide-scale {
+  transform-origin: top left;
+  width: 100%;
 }
 .slide-head { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 22px;
   border-bottom: 2px solid var(--brand); padding-bottom: 14px; }
@@ -176,7 +180,7 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
 .title-hero h1 { margin: 0; font-size: 2rem; color: var(--brand); line-height: 1.2; }
 .title-hero .period { font-size: 1.2rem; color: var(--muted); }
 .geo-grid { display: grid; gap: 12px; }
-.geo-grid img { width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+.geo-grid img { width: 100%; height: auto; max-height: 520px; object-fit: contain; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
 .split-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
 .chart-block h3 { margin: 0 0 12px; font-size: 1.05rem; color: var(--brand); }
 .pie-wrap { display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: center; }
@@ -196,22 +200,106 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
   position: sticky; top: 0; z-index: 5; background: rgba(243,246,246,0.95);
   backdrop-filter: blur(6px); border-bottom: 1px solid var(--line);
   padding: 10px 16px; display: flex; gap: 12px; align-items: center; justify-content: center;
+  flex-wrap: wrap;
 }
 .toolbar-print button {
   appearance: none; border: 0; background: var(--brand); color: #fff;
   border-radius: 8px; padding: 10px 16px; font: inherit; font-weight: 600; cursor: pointer;
 }
+@page {
+  size: A4 landscape;
+  margin: 0;
+}
 @media print {
   .toolbar-print { display: none !important; }
-  body { background: #fff; }
-  .deck { max-width: none; padding: 0; }
-  .slide { box-shadow: none; border: 0; border-radius: 0; margin: 0; min-height: 100vh; }
+  html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
+  .deck { max-width: none; width: 100%; margin: 0; padding: 0; }
+  .slide {
+    box-shadow: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    padding: 10mm 12mm !important;
+    min-height: 0 !important;
+    width: 297mm;
+    height: 210mm;
+    max-height: 210mm;
+    overflow: hidden !important;
+    page-break-after: always;
+    break-after: page;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .slide:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+  .title-slide { min-height: 0 !important; height: 210mm; }
+  .title-hero { padding: 18px 8px; gap: 12px; }
+  .title-hero img.gerb { width: 110px; }
+  .title-hero h1 { font-size: 1.55rem; }
+  .slide-titles h2 { font-size: 1.15rem; }
+  .pie { width: 170px !important; height: 170px !important; }
+  .geo-grid img { max-height: 145mm; }
+  .slide-body { gap: 12px; }
+  .chart-block h3 { margin-bottom: 8px; font-size: 0.95rem; }
+  .bars { gap: 7px; }
+  .bar-track { height: 11px; }
+  .legend { gap: 5px; }
+  .legend li { font-size: 0.85rem; }
 }
 @media (max-width: 800px) {
   .split-2, .pie-wrap, .bar-row { grid-template-columns: 1fr; }
   .bar-val { text-align: left; }
 }
 `.trim();
+}
+
+function buildPrintFitScript() {
+  // Scales each slide's inner content to fit one landscape A4 page when printing.
+  return `<script>(function(){
+  var PAGE_W = 297;
+  var PAGE_H = 210;
+  var PAD_X = 24;
+  var PAD_Y = 20;
+  function mmToPx(mm){ return mm * 96 / 25.4; }
+  function fitSlides(){
+    var slides = document.querySelectorAll('.slide');
+    var availW = mmToPx(PAGE_W) - mmToPx(PAD_X);
+    var availH = mmToPx(PAGE_H) - mmToPx(PAD_Y);
+    slides.forEach(function(slide){
+      var inner = slide.querySelector('.slide-scale');
+      if (!inner) {
+        inner = document.createElement('div');
+        inner.className = 'slide-scale';
+        while (slide.firstChild) inner.appendChild(slide.firstChild);
+        slide.appendChild(inner);
+      }
+      inner.style.transform = 'none';
+      inner.style.width = '100%';
+      void inner.offsetHeight;
+      var rect = inner.getBoundingClientRect();
+      var scale = Math.min(1, availW / Math.max(rect.width, 1), availH / Math.max(rect.height, 1));
+      if (!isFinite(scale) || scale <= 0) scale = 1;
+      inner.style.transformOrigin = 'top left';
+      inner.style.transform = 'scale(' + scale + ')';
+      inner.style.width = (100 / scale) + '%';
+    });
+  }
+  function clearFit(){
+    document.querySelectorAll('.slide-scale').forEach(function(inner){
+      inner.style.transform = '';
+      inner.style.width = '';
+    });
+  }
+  window.addEventListener('beforeprint', fitSlides);
+  window.addEventListener('afterprint', clearFit);
+  var mo = window.matchMedia && window.matchMedia('print');
+  if (mo) {
+    if (mo.addEventListener) mo.addEventListener('change', function(e){ e.matches ? fitSlides() : clearFit(); });
+    else if (mo.addListener) mo.addListener(function(e){ e.matches ? fitSlides() : clearFit(); });
+  }
+})();</script>`;
 }
 
 /**
@@ -257,6 +345,7 @@ export async function buildAnalyticsHtmlString({
 
   slides.push(
     `<section class="slide title-slide" data-slide="1">` +
+      `<div class="slide-scale">` +
       `<div class="slide-head"><div class="slide-num">1</div>` +
       `<div class="slide-titles"><h2>Титульный слайд</h2><p class="ctx">${escapeHtml(ctx)}</p></div></div>` +
       `<div class="title-hero">` +
@@ -264,7 +353,7 @@ export async function buildAnalyticsHtmlString({
       `<h1>${escapeHtml(districtFull)}</h1>` +
       `<p class="period">Исследование проблематики, ${escapeHtml(monthYear)}</p>` +
       `<p class="note">Код отчёта: ${escapeHtml(quarterCode)} · ${escapeHtml(quarterRoman)}</p>` +
-      `</div></section>`
+      `</div></div></section>`
   );
 
   slides.push(slide(2, 'География исследования — обзор', mapBlock, ctx));
@@ -343,8 +432,9 @@ export async function buildAnalyticsHtmlString({
     `<title>${escapeHtml(`${DISTRICT_CODE} - проблематика в ${quarterCode}`)}</title>` +
     `<style>${buildCss()}</style></head><body>` +
     `<div class="toolbar-print"><button type="button" onclick="window.print()">Печать / PDF</button>` +
-    `<span class="note">Цифры совпадают с аналитикой опроса · ${escapeHtml(String(total))} проведений</span></div>` +
+    `<span class="note">Цифры совпадают с аналитикой · ${escapeHtml(String(total))} проведений · для PDF: альбомная A4, поля «По умолчанию» / без полей</span></div>` +
     `<main class="deck">${slides.join('\n')}</main>` +
+    buildPrintFitScript() +
     `</body></html>`
   );
 }
