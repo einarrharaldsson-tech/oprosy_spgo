@@ -83,7 +83,7 @@ export default function SurveyAnalytics({ survey, items, onError }) {
         items,
         district: districtCode,
         districtFull,
-        filename: analyticsXlsxFilename(districtCode),
+        filename: analyticsXlsxFilename(districtCode, new Date(), survey?.title),
       });
     } catch (err) {
       onError?.(err.message || 'Не удалось сформировать Excel-отчёт');
@@ -190,7 +190,7 @@ export default function SurveyAnalytics({ survey, items, onError }) {
               type="button"
               className="btn btn-ghost"
               style={{ minHeight: 36, padding: '0 12px' }}
-              data-xlsx-rev="2"
+              data-xlsx-rev="3"
               onClick={downloadXlsx}
               disabled={exportBusy || !canExport}
             >

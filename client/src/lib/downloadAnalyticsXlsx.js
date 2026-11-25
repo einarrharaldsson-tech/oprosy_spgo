@@ -67,8 +67,35 @@ export function quarterLabel(date = new Date()) {
   return `${q}кв${yy}`;
 }
 
-export function analyticsXlsxFilename(district = DISTRICT_CODE, date = new Date()) {
-  return `${district} - проблематика в ${quarterLabel(date)}.xlsx`;
+function safeFilenamePart(value, fallback = 'опрос') {
+  const cleaned = String(value || '')
+    .replace(/[<>:"/\\|?*]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return (cleaned || fallback).slice(0, 80);
+}
+
+/**
+ * Universal analytics workbook name: «СПГО - Название опроса (4кв26).xlsx».
+ * For the classic problematika survey keep the familiar «проблематика в …» form.
+ */
+export function analyticsXlsxFilename(
+  district = DISTRICT_CODE,
+  date = new Date(),
+  surveyTitle
+) {
+  const code = district || DISTRICT_CODE;
+  const quarter = quarterLabel(date);
+  const title = String(surveyTitle || '').trim();
+  const isProblematika =
+    !title ||
+    /^опросник по проблематике\s*[-—–−‐]\s*ноябрь\s*2026$/i.test(
+      title.replace(/\s+/g, ' ').trim()
+    );
+  if (isProblematika) {
+    return `${code} - проблематика в ${quarter}.xlsx`;
+  }
+  return `${code} - ${safeFilenamePart(title)} (${quarter}).xlsx`;
 }
 
 /**
@@ -243,8 +270,11 @@ function writeQuestionBlock(ws, startRow, questionText, district, rows, totalRes
 }
 
 /**
- * Build and download the municipal «проблематика» XLSX report
- * (layout matches the official template; district column = СПГО).
+ * Build and download the municipal analytics XLSX for any survey.
+ * Layout matches the official problematika template: municipality headcount,
+ * then one frequency block per choice question (options from the survey itself),
+ * plus «другое» free-text when present. Works for future surveys with any
+ * questions / answer options. CSV remains the raw session export.
  */
 export async function downloadAnalyticsXlsx({
   survey,
@@ -255,6 +285,11 @@ export async function downloadAnalyticsXlsx({
 }) {
   const total = items?.length || 0;
   if (!total) throw new Error('Нет данных для Excel-отчёта');
+
+  const questions = (survey?.questions || []).filter(isChoiceQuestion);
+  if (!questions.length) {
+    throw new Error('В опросе нет вопросов с вариантами ответов для Excel-отчёта');
+  }
 
   const resolvedCode =
     district ||
@@ -283,7 +318,6 @@ export async function downloadAnalyticsXlsx({
   let row = 1;
   row = writeMunicipalityBlock(ws, row, resolvedCode, total, resolvedFull);
 
-  const questions = (survey?.questions || []).filter(isChoiceQuestion);
   for (const question of questions) {
     const rows = buildFrequencyRows(question, items);
     row = writeQuestionBlock(
@@ -303,7 +337,8 @@ export async function downloadAnalyticsXlsx({
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = filename || analyticsXlsxFilename(resolvedCode);
+  a.download =
+    filename || analyticsXlsxFilename(resolvedCode, new Date(), survey?.title);
   document.body.appendChild(a);
   a.click();
   a.remove();
