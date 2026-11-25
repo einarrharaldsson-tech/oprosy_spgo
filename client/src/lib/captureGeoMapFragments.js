@@ -45,10 +45,9 @@ function waitForTileLayer(layer, timeoutMs = 8000) {
 
     const scheduleIdle = () => {
       if (idleTimer) clearTimeout(idleTimer);
-      // Settle shortly after the last tile event / layer load.
       idleTimer = setTimeout(() => {
         if (pending <= 0) finish();
-      }, 280);
+      }, 320);
     };
 
     const onLoading = () => {
@@ -75,52 +74,94 @@ function waitForTileLayer(layer, timeoutMs = 8000) {
     layer.on('tileerror', onTileDone);
 
     const hardStop = setTimeout(finish, timeoutMs);
-    // If tiles were already cached, 'load' may have fired before we subscribed —
-    // give a short fallback wait.
     setTimeout(() => {
       if (!sawActivity && pending === 0) scheduleIdle();
-    }, 400);
+    }, 500);
   });
-}
-
-async function canvasToPngBlob(canvas) {
-  return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
 }
 
 /** Poll until Leaflet tile <img> nodes have decoded (or timeout). */
 async function waitForTileImages(host, timeoutMs = 8000) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
-    const imgs = Array.from(host.querySelectorAll('.leaflet-tile-pane img'));
+    const imgs = Array.from(host.querySelectorAll('.leaflet-tile-pane img.leaflet-tile'));
     if (imgs.length > 0 && imgs.every((img) => img.complete && img.naturalWidth > 0)) {
       await sleep(200);
-      return;
+      return true;
     }
     await sleep(120);
+  }
+  return false;
+}
+
+/** Force Leaflet tile fade-in to finished state before snapshot. */
+function revealTiles(root) {
+  root.querySelectorAll('.leaflet-tile').forEach((el) => {
+    el.style.opacity = '1';
+    el.style.visibility = 'visible';
+  });
+}
+
+async function canvasToPngBlob(canvas) {
+  return new Promise((resolve, reject) => {
+    try {
+      canvas.toBlob((blob) => {
+        if (!blob) reject(new Error('toBlob returned empty'));
+        else resolve(blob);
+      }, 'image/png');
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+/** Rough check that the snapshot is not a blank white frame. */
+function canvasHasContent(canvas) {
+  try {
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const w = Math.min(canvas.width, 160);
+    const h = Math.min(canvas.height, 160);
+    if (w < 4 || h < 4) return false;
+    const { data } = ctx.getImageData(0, 0, w, h);
+    let colored = 0;
+    for (let i = 0; i < data.length; i += 32) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const a = data[i + 3];
+      if (a > 8 && (r < 248 || g < 248 || b < 248)) colored += 1;
+    }
+    return colored >= 8;
+  } catch {
+    // Tainted canvas — assume content exists; caller may still fail on toBlob.
+    return true;
   }
 }
 
 /**
- * Render an off-screen Leaflet map for a set of points and capture a PNG blob.
- * Host stays in the viewport (opacity:0) — tiles often fail to load when the
- * map is positioned far off-screen (common blank-map issue on Windows).
+ * Render a Leaflet map for a set of points and capture a PNG blob.
+ *
+ * Host is placed just below the viewport with opacity:1.
+ * Do NOT use opacity:0 — html2canvas multiplies opacity and yields a blank image.
  */
 export async function capturePointsMap(points, { width = 960, height = 540, pad = 0.4, maxZoom = 17 } = {}) {
   if (!points?.length) return null;
 
   const host = document.createElement('div');
   host.setAttribute('aria-hidden', 'true');
+  const top = Math.max(window.innerHeight || 800, 800) + 40;
   host.style.cssText = [
     'position:fixed',
     'left:0',
-    'top:0',
+    `top:${top}px`,
     `width:${width}px`,
     `height:${height}px`,
     'overflow:hidden',
-    'background:#fff',
-    'opacity:0',
+    'background:#ffffff',
+    'opacity:1',
+    'visibility:visible',
     'pointer-events:none',
-    'z-index:-1',
+    'z-index:0',
   ].join(';');
   document.body.appendChild(host);
 
@@ -146,6 +187,7 @@ export async function capturePointsMap(points, { width = 960, height = 540, pad 
       updateWhenIdle: false,
       updateWhenZooming: false,
       keepBuffer: 4,
+      opacity: 1,
     }).addTo(map);
 
     const group = L.featureGroup();
@@ -168,17 +210,21 @@ export async function capturePointsMap(points, { width = 960, height = 540, pad 
     }
     map.invalidateSize(true);
 
-    await sleep(120);
+    await sleep(150);
     map.invalidateSize(true);
-    await waitForTileLayer(tiles, 10000);
-    await waitForTileImages(host, 10000);
-    await sleep(350);
+    await waitForTileLayer(tiles, 12000);
+    await waitForTileImages(host, 12000);
+    revealTiles(host);
+    await sleep(400);
+    revealTiles(host);
 
     const { default: html2canvas } = await import('html2canvas');
     const target = host.querySelector('.leaflet-container') || host;
-    const canvas = await html2canvas(target, {
+
+    // useCORS without allowTaint so toBlob stays allowed.
+    let canvas = await html2canvas(target, {
       useCORS: true,
-      allowTaint: true,
+      allowTaint: false,
       backgroundColor: '#ffffff',
       scale: 2,
       logging: false,
@@ -186,13 +232,42 @@ export async function capturePointsMap(points, { width = 960, height = 540, pad 
       height,
       imageTimeout: 20000,
       onclone: (_doc, cloned) => {
-        // Ensure tile images are visible in the clone (opacity/transitions).
         cloned.querySelectorAll('.leaflet-tile').forEach((el) => {
           el.style.opacity = '1';
           el.style.visibility = 'visible';
         });
+        const root = cloned.querySelector('.leaflet-container') || cloned;
+        root.style.opacity = '1';
+        root.style.visibility = 'visible';
       },
     });
+
+    if (!canvasHasContent(canvas)) {
+      // Retry once after a longer settle — tiles may still have been fading.
+      await sleep(800);
+      revealTiles(host);
+      canvas = await html2canvas(target, {
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: '#ffffff',
+        scale: 2,
+        logging: false,
+        width,
+        height,
+        imageTimeout: 20000,
+        onclone: (_doc, cloned) => {
+          cloned.querySelectorAll('.leaflet-tile').forEach((el) => {
+            el.style.opacity = '1';
+            el.style.visibility = 'visible';
+          });
+        },
+      });
+    }
+
+    if (!canvasHasContent(canvas)) {
+      throw new Error('Map snapshot is blank');
+    }
+
     return canvasToPngBlob(canvas);
   } finally {
     try {
@@ -202,6 +277,31 @@ export async function capturePointsMap(points, { width = 960, height = 540, pad 
     }
     host.remove();
   }
+}
+
+/** Snapshot the already-rendered analytics Leaflet map (fallback). */
+export async function captureVisibleMapNode(mapNode) {
+  if (!mapNode) return null;
+  revealTiles(mapNode);
+  await sleep(500);
+  revealTiles(mapNode);
+  const { default: html2canvas } = await import('html2canvas');
+  const canvas = await html2canvas(mapNode, {
+    useCORS: true,
+    allowTaint: false,
+    backgroundColor: '#ffffff',
+    scale: 2,
+    logging: false,
+    imageTimeout: 20000,
+    onclone: (_doc, cloned) => {
+      cloned.querySelectorAll('.leaflet-tile').forEach((el) => {
+        el.style.opacity = '1';
+        el.style.visibility = 'visible';
+      });
+    },
+  });
+  if (!canvasHasContent(canvas)) return null;
+  return canvasToPngBlob(canvas);
 }
 
 /** Overview map snapshot for all geotags (same offscreen path as fragments). */

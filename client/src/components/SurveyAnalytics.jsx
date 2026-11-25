@@ -102,18 +102,34 @@ export default function SurveyAnalytics({ survey, items, onError }) {
     try {
       let mapImage;
       let mapFragments = [];
-      // Offscreen Leaflet captures wait for OSM tiles — more reliable than
-      // snapshotting the on-screen map (which often races tile load on Windows).
+      const {
+        captureOverviewMap,
+        captureGeoMapFragments,
+        captureVisibleMapNode,
+      } = await import('../lib/captureGeoMapFragments');
+
+      // Overview: prefer dedicated capture (waits for tiles). Fall back to the
+      // on-screen analytics map if the offscreen path fails.
       try {
-        const { captureOverviewMap, captureGeoMapFragments } = await import(
-          '../lib/captureGeoMapFragments'
-        );
         mapImage = await captureOverviewMap(items);
-        mapFragments = await captureGeoMapFragments(items);
       } catch {
         mapImage = undefined;
+      }
+      if (!mapImage) {
+        try {
+          const mapNode = reportRef.current?.querySelector('.leaflet-container');
+          mapImage = await captureVisibleMapNode(mapNode);
+        } catch {
+          mapImage = undefined;
+        }
+      }
+
+      try {
+        mapFragments = await captureGeoMapFragments(items);
+      } catch {
         mapFragments = [];
       }
+
       const { downloadAnalyticsHtml, analyticsHtmlFilename, isProblematikaPptxSurvey } =
         await import('../lib/downloadAnalyticsHtml');
       if (!isProblematikaPptxSurvey(survey)) return;
