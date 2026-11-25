@@ -86,16 +86,36 @@ a {
 }
 
 .brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.brand__name {
   font-family: var(--display);
   font-weight: 700;
   font-size: clamp(1.15rem, 3.5vw, 1.35rem);
   letter-spacing: -0.02em;
   color: var(--brand);
-  line-height: 1.15;
 }
 
-.brand span {
-  color: var(--accent);
+.brand__tagline {
+  font-family: var(--font);
+  font-weight: 500;
+  font-size: 0.68rem;
+  letter-spacing: 0.01em;
+  color: var(--ink-soft);
+  line-height: 1.25;
+  max-width: 22rem;
+}
+
+.brand__credit {
+  font-size: 0.58rem;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--ink-soft) 78%, transparent);
 }
 
 .app-footer {
@@ -142,9 +162,22 @@ a {
 }
 
 .login-card .brand {
-  font-size: clamp(1.5rem, 5vw, 2rem);
-  display: block;
-  margin-bottom: 8px;
+  display: flex;
+  margin-bottom: 10px;
+  gap: 4px;
+}
+
+.login-card .brand__name {
+  font-size: clamp(1.6rem, 5.5vw, 2.1rem);
+}
+
+.login-card .brand__tagline {
+  font-size: 0.82rem;
+  max-width: none;
+}
+
+.login-card .brand__credit {
+  font-size: 0.68rem;
 }
 
 .topbar-meta {
@@ -281,8 +314,16 @@ a {
     padding-top: max(8px, env(safe-area-inset-top));
   }
 
-  .brand {
+  .brand__name {
     font-size: clamp(1rem, 3vw, 1.15rem);
+  }
+
+  .brand__tagline {
+    font-size: 0.6rem;
+  }
+
+  .brand__credit {
+    font-size: 0.52rem;
   }
 
   .nav {

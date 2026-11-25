@@ -251,7 +251,7 @@ export async function downloadAnalyticsXlsx({ survey, items, district = DISTRICT
   if (!total) throw new Error('Нет данных для Excel-отчёта');
 
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'Опросы СПГО';
+  workbook.creator = 'Реплика';
   workbook.created = new Date();
   const ws = workbook.addWorksheet('Лист1', {
     properties: { defaultRowHeight: 18 },
