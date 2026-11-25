@@ -195,6 +195,10 @@ export default function AdminUsersPage() {
 
   const setBlocked = async (u, blocked) => {
     if (!isAdmin) return;
+    if (u.role === 'admin') {
+      setError('Администраторов блокировать нельзя');
+      return;
+    }
     const label = u.fullName ? `${u.fullName} (${u.login})` : u.login;
     const okConfirm = window.confirm(
       blocked
@@ -354,14 +358,14 @@ export default function AdminUsersPage() {
             >
               Изменить
             </button>
-            {isAdmin && me?.id !== u.id && (
+            {isAdmin && me?.id !== u.id && u.role !== 'admin' && (
               <button
                 type="button"
                 className={`btn btn-sm ${u.isActive ? 'btn-danger' : 'btn-primary'}`}
                 disabled={busyId === u.id}
                 onClick={() => setBlocked(u, u.isActive)}
               >
-                {u.isActive ? 'Блок' : 'Разблок'}
+                {u.isActive ? 'Заблокировать' : 'Разблокировать'}
               </button>
             )}
             {me?.id !== u.id && (

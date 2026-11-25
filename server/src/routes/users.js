@@ -193,14 +193,20 @@ router.put('/:id', async (req, res) => {
     if (id === req.user.id && isActive === false) {
       return res.status(400).json({ error: 'Нельзя отключить собственную учётную запись' });
     }
-    // Only admins may block/unblock accounts
-    if (isActive !== undefined && !isAdmin(req.user)) {
-      return res.status(403).json({ error: 'Блокировать пользователей может только администратор' });
-    }
 
     const fields = [];
     const params = { id };
     const nextRole = role !== undefined ? role : target.role;
+
+    // Only admins may block/unblock accounts; never block administrators
+    if (isActive !== undefined) {
+      if (!isAdmin(req.user)) {
+        return res.status(403).json({ error: 'Блокировать пользователей может только администратор' });
+      }
+      if (isActive === false && (target.role === 'admin' || nextRole === 'admin')) {
+        return res.status(400).json({ error: 'Администраторов блокировать нельзя' });
+      }
+    }
 
     if (fullName !== undefined) {
       fields.push('full_name = :fullName');
