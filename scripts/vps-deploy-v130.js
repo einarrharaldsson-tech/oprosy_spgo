@@ -27,6 +27,8 @@ const CODE_FILES = [
   'client/src/components/SurveyAnalytics.jsx',
   'client/src/lib/downloadAnalyticsHtml.js',
   'client/src/lib/downloadAnalyticsXlsx.js',
+  'client/src/lib/captureGeoMapFragments.js',
+  'client/src/lib/geoClusters.js',
   'client/src/lib/problematikaReport.js',
   'client/src/lib/surveyAnalytics.js',
 ];

@@ -101,6 +101,7 @@ export default function SurveyAnalytics({ survey, items, onError }) {
     setDeckBusy(true);
     try {
       let mapImage;
+      let mapFragments = [];
       const mapNode = reportRef.current?.querySelector('.leaflet-container');
       if (mapNode) {
         await new Promise((resolve) => window.setTimeout(resolve, 400));
@@ -114,6 +115,12 @@ export default function SurveyAnalytics({ survey, items, onError }) {
         });
         mapImage = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
       }
+      try {
+        const { captureGeoMapFragments } = await import('../lib/captureGeoMapFragments');
+        mapFragments = await captureGeoMapFragments(items);
+      } catch {
+        mapFragments = [];
+      }
       const { downloadAnalyticsHtml, analyticsHtmlFilename, isProblematikaPptxSurvey } =
         await import('../lib/downloadAnalyticsHtml');
       if (!isProblematikaPptxSurvey(survey)) return;
@@ -121,6 +128,7 @@ export default function SurveyAnalytics({ survey, items, onError }) {
         survey,
         items,
         mapImage,
+        mapFragments,
         filename: analyticsHtmlFilename(),
       });
     } catch (err) {

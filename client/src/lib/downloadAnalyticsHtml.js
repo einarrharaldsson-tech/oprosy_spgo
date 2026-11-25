@@ -189,6 +189,33 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
 .title-hero .period { font-size: 1.2rem; color: var(--muted); }
 .geo-grid { display: grid; gap: 12px; }
 .geo-grid img { width: 100%; height: auto; max-height: 520px; object-fit: contain; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+.geo-fragments {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 18px;
+  align-items: start;
+}
+.geo-fragments--one { grid-template-columns: minmax(0, 1fr); max-width: 820px; margin: 0 auto; }
+.geo-frag {
+  display: grid;
+  gap: 8px;
+}
+.geo-frag img {
+  width: 100%;
+  height: auto;
+  max-height: 280px;
+  object-fit: cover;
+  object-position: center;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+.geo-frag__cap {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 650;
+  color: var(--brand);
+}
 .split-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
 .chart-block h3 { margin: 0 0 12px; font-size: 1.05rem; color: var(--brand); }
 .pie-wrap { display: grid; grid-template-columns: auto minmax(160px, max-content); gap: 18px; align-items: center; justify-content: start; }
@@ -289,6 +316,8 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
   .pie { width: 280px !important; height: 280px !important; max-width: none !important; }
   .slide--pies .pie { width: 300px !important; height: 300px !important; }
   .geo-grid img { max-height: 140mm; }
+  .geo-fragments { gap: 12px 14px; }
+  .geo-frag img { max-height: 68mm; }
   .slide-body {
     gap: 18px;
     flex: 1 1 auto;
@@ -392,6 +421,7 @@ export async function buildAnalyticsHtmlString({
   survey,
   items,
   mapImage,
+  mapFragments = [],
   date = new Date(),
   districtFull = DISTRICT_FULL,
 }) {
@@ -403,6 +433,15 @@ export async function buildAnalyticsHtmlString({
   const slots = mapSurveyToPptxSlots(survey, items);
   const gerbData = await toDataUrl(gerbUrl);
   const mapData = mapImage ? await toDataUrl(mapImage) : '';
+  const fragmentCards = [];
+  for (const frag of mapFragments || []) {
+    const src = frag?.image ? await toDataUrl(frag.image) : '';
+    if (!src) continue;
+    fragmentCards.push({
+      src,
+      label: frag.label || `Фрагмент · ${frag.count || ''}`.trim(),
+    });
+  }
 
   const genderRows = orderGender(rowsFromChart(slots.gender, { sortByShare: false }));
   const ageRows = rowsFromChart(slots.age, { sortByShare: false });
@@ -423,6 +462,21 @@ export async function buildAnalyticsHtmlString({
     ? `<div class="geo-grid"><img src="${mapData}" alt="Карта мест проведения"/></div>`
     : `<p class="muted">Карта недоступна — откройте аналитику с геометками и сформируйте презентацию снова.</p>`;
 
+  const fragmentsBlock = fragmentCards.length
+    ? `<div class="geo-fragments${fragmentCards.length === 1 ? ' geo-fragments--one' : ''}">` +
+      fragmentCards
+        .map(
+          (f) =>
+            `<figure class="geo-frag">` +
+            `<img src="${f.src}" alt="${escapeHtml(f.label)}"/>` +
+            `<figcaption class="geo-frag__cap">${escapeHtml(f.label)}</figcaption>` +
+            `</figure>`
+        )
+        .join('') +
+      `</div>` +
+      `<p class="note">Укрупнённые зоны с наибольшим числом геометок проведения.</p>`
+    : '';
+
   const slides = [];
 
   slides.push(
@@ -441,6 +495,9 @@ export async function buildAnalyticsHtmlString({
   slides.push(slide(2, 'География исследования — обзор', mapBlock, ctx));
 
   let n = 3;
+  if (fragmentsBlock) {
+    slides.push(slide(n++, 'География исследования — фрагменты', fragmentsBlock, ctx));
+  }
   slides.push(
     slide(
       n++,
@@ -520,8 +577,8 @@ export async function buildAnalyticsHtmlString({
   );
 }
 
-export async function downloadAnalyticsHtml({ survey, items, mapImage, filename }) {
-  const html = await buildAnalyticsHtmlString({ survey, items, mapImage });
+export async function downloadAnalyticsHtml({ survey, items, mapImage, mapFragments, filename }) {
+  const html = await buildAnalyticsHtmlString({ survey, items, mapImage, mapFragments });
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

@@ -119,7 +119,16 @@ const items = Array.from({ length: 200 }, (_, i) => ({
 }));
 
 const slots = mapSurveyToPptxSlots(survey, items);
-const html = await buildAnalyticsHtmlString({ survey, items });
+const tinyPng =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+const html = await buildAnalyticsHtmlString({
+  survey,
+  items,
+  mapFragments: [
+    { image: tinyPng, label: 'Фрагмент 1 · 12 меток', count: 12 },
+    { image: tinyPng, label: 'Фрагмент 2 · 8 меток', count: 8 },
+  ],
+});
 const outPath = path.join('/opt/cursor/artifacts', analyticsHtmlFilename().replace(/\s+/g, '_'));
 fs.mkdirSync('/opt/cursor/artifacts', { recursive: true });
 fs.writeFileSync(outPath, html);
@@ -135,7 +144,9 @@ console.log(
       hasFemale55: />(55|55\.0)%</.test(html),
       gender: !!slots.gender,
       overall: !!slots.overall,
-      slides: (html.match(/class="slide/g) || []).length,
+      hasFragmentsSlide: html.includes('География исследования — фрагменты'),
+      fragmentCards: (html.match(/class="geo-frag"/g) || []).length,
+      slides: (html.match(/class="slide"/g) || []).length,
       filename: analyticsHtmlFilename(),
     },
     null,
