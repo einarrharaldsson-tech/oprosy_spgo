@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { query } from '../db.js';
 import { verifyPassword } from '../services/authPassword.js';
-import { authRequired, signToken } from '../middleware/auth.js';
+import { authRequired, publicUser, signToken } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -13,7 +13,14 @@ router.post('/login', async (req, res) => {
     }
 
     const users = await query(
-      'SELECT id, login, password_hash, full_name, role, is_active FROM users WHERE login = :login',
+      `SELECT u.id, u.login, u.password_hash, u.full_name, u.role, u.municipality_id, u.is_active,
+              m.inn AS municipality_inn,
+              m.name_full AS municipality_name_full,
+              m.name_short AS municipality_name_short,
+              m.is_active AS municipality_is_active
+       FROM users u
+       LEFT JOIN municipalities m ON m.id = u.municipality_id
+       WHERE u.login = :login`,
       { login: String(login).trim() }
     );
 
@@ -30,12 +37,7 @@ router.post('/login', async (req, res) => {
     const token = signToken(user);
     res.json({
       token,
-      user: {
-        id: user.id,
-        login: user.login,
-        fullName: user.full_name,
-        role: user.role,
-      },
+      user: publicUser(user),
     });
   } catch (err) {
     console.error(err);
@@ -44,12 +46,7 @@ router.post('/login', async (req, res) => {
 });
 
 router.get('/me', authRequired, (req, res) => {
-  res.json({
-    id: req.user.id,
-    login: req.user.login,
-    fullName: req.user.full_name,
-    role: req.user.role,
-  });
+  res.json(publicUser(req.user));
 });
 
 export default router;

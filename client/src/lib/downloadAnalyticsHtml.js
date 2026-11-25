@@ -457,13 +457,25 @@ export async function buildAnalyticsHtmlString({
   mapImage,
   mapFragments = [],
   date = new Date(),
-  districtFull = DISTRICT_FULL,
+  districtFull,
+  districtCode,
 }) {
   const total = items?.length || 0;
   if (!total) throw new Error('Нет данных для презентации');
 
+  const resolvedFull =
+    districtFull ||
+    survey?.municipality?.nameFull ||
+    survey?.municipalityNameFull ||
+    DISTRICT_FULL;
+  const resolvedCode =
+    districtCode ||
+    survey?.municipality?.nameShort ||
+    survey?.municipalityNameShort ||
+    DISTRICT_CODE;
+
   const { monthYear, quarterCode, quarterRoman } = quarterParts(date);
-  const ctx = `(${districtFull}: ${monthYear}, опрошено ${total})`;
+  const ctx = `(${resolvedFull}: ${monthYear}, опрошено ${total})`;
   const slots = mapSurveyToPptxSlots(survey, items);
   const gerbData = await toDataUrl(gerbUrl);
   const mapData = mapImage ? await toDataUrl(mapImage) : '';
@@ -520,7 +532,7 @@ export async function buildAnalyticsHtmlString({
       `<div class="slide-titles"><h2>Титульный слайд</h2><p class="ctx">${escapeHtml(ctx)}</p></div></div>` +
       `<div class="title-hero">` +
       (gerbData ? `<img class="gerb" src="${gerbData}" alt="Герб"/>` : '') +
-      `<h1>${escapeHtml(districtFull)}</h1>` +
+      `<h1>${escapeHtml(resolvedFull)}</h1>` +
       `<p class="period">Исследование проблематики, ${escapeHtml(monthYear)}</p>` +
       `<p class="note">Код отчёта: ${escapeHtml(quarterCode)} · ${escapeHtml(quarterRoman)}</p>` +
       `</div></div></section>`
@@ -601,7 +613,7 @@ export async function buildAnalyticsHtmlString({
   return (
     `<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"/>` +
     `<meta name="viewport" content="width=device-width, initial-scale=1"/>` +
-    `<title>${escapeHtml(`${DISTRICT_CODE} - проблематика в ${quarterCode}`)}</title>` +
+    `<title>${escapeHtml(`${resolvedCode} - проблематика в ${quarterCode}`)}</title>` +
     `<style>${buildCss()}</style></head><body>` +
     `<div class="toolbar-print"><button type="button" onclick="(window.__oprosyPreparePrint||window.print)()">Печать / PDF</button>` +
     `<span class="note">Цифры совпадают с аналитикой · ${escapeHtml(String(total))} проведений · PDF: альбомная A4, поля «Нет»</span></div>` +
@@ -611,13 +623,32 @@ export async function buildAnalyticsHtmlString({
   );
 }
 
-export async function downloadAnalyticsHtml({ survey, items, mapImage, mapFragments, filename }) {
-  const html = await buildAnalyticsHtmlString({ survey, items, mapImage, mapFragments });
+export async function downloadAnalyticsHtml({
+  survey,
+  items,
+  mapImage,
+  mapFragments,
+  filename,
+  districtFull,
+  districtCode,
+}) {
+  const html = await buildAnalyticsHtmlString({
+    survey,
+    items,
+    mapImage,
+    mapFragments,
+    districtFull,
+    districtCode,
+  });
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = filename || analyticsHtmlFilename();
+  a.download =
+    filename ||
+    analyticsHtmlFilename(
+      districtCode || survey?.municipality?.nameShort || survey?.municipalityNameShort
+    );
   document.body.appendChild(a);
   a.click();
   a.remove();

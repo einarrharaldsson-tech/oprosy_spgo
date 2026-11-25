@@ -33,10 +33,12 @@ export default function ConstructorEditPage() {
     let alive = true;
     (async () => {
       try {
-        const [data, users] = await Promise.all([
-          api(`/surveys/${id}`),
-          api('/surveys/meta/assignable-users'),
-        ]);
+        const data = await api(`/surveys/${id}`);
+        if (!alive) return;
+        const assignUrl = data.municipalityId
+          ? `/surveys/meta/assignable-users?municipalityId=${data.municipalityId}`
+          : '/surveys/meta/assignable-users';
+        const users = await api(assignUrl);
         if (!alive) return;
         setSurvey({
           ...data,

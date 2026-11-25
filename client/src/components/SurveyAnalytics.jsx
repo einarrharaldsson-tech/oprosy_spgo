@@ -74,10 +74,16 @@ export default function SurveyAnalytics({ survey, items, onError }) {
       const { downloadAnalyticsXlsx, analyticsXlsxFilename } = await import(
         '../lib/downloadAnalyticsXlsx'
       );
+      const districtCode =
+        survey?.municipality?.nameShort || survey?.municipalityNameShort || undefined;
+      const districtFull =
+        survey?.municipality?.nameFull || survey?.municipalityNameFull || undefined;
       await downloadAnalyticsXlsx({
         survey,
         items,
-        filename: analyticsXlsxFilename(),
+        district: districtCode,
+        districtFull,
+        filename: analyticsXlsxFilename(districtCode),
       });
     } catch (err) {
       onError?.(err.message || 'Не удалось сформировать Excel-отчёт');
@@ -133,12 +139,18 @@ export default function SurveyAnalytics({ survey, items, onError }) {
       const { downloadAnalyticsHtml, analyticsHtmlFilename, isProblematikaPptxSurvey } =
         await import('../lib/downloadAnalyticsHtml');
       if (!isProblematikaPptxSurvey(survey)) return;
+      const districtCode =
+        survey?.municipality?.nameShort || survey?.municipalityNameShort || undefined;
+      const districtFull =
+        survey?.municipality?.nameFull || survey?.municipalityNameFull || undefined;
       await downloadAnalyticsHtml({
         survey,
         items,
         mapImage,
         mapFragments,
-        filename: analyticsHtmlFilename(),
+        districtCode,
+        districtFull,
+        filename: analyticsHtmlFilename(districtCode),
       });
     } catch (err) {
       onError?.(err.message || 'Не удалось сформировать HTML-презентацию');

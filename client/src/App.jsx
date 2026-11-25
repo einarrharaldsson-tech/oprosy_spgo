@@ -7,6 +7,7 @@ import ConductPage from './pages/ConductPage';
 import HistoryPage from './pages/HistoryPage';
 import CompletedPage from './pages/CompletedPage';
 import AdminUsersPage from './pages/AdminUsersPage';
+import AdminMunicipalitiesPage from './pages/AdminMunicipalitiesPage';
 import ConstructorListPage from './pages/ConstructorListPage';
 import ConstructorEditPage from './pages/ConstructorEditPage';
 import SurveyResponsesPage from './pages/SurveyResponsesPage';
@@ -47,6 +48,7 @@ export default function App() {
             <Route path="history" element={<HistoryPage />} />
           </Route>
           <Route element={<RequireAuth roles={['admin']} />}>
+            <Route path="admin/municipalities" element={<AdminMunicipalitiesPage />} />
             <Route path="admin/users" element={<AdminUsersPage />} />
             <Route path="admin/import" element={<ImportSurveyPage />} />
           </Route>

@@ -102,6 +102,16 @@ a {
   color: var(--brand);
 }
 
+.brand__municipality {
+  font-family: var(--font);
+  font-weight: 500;
+  font-size: 0.72rem;
+  letter-spacing: 0.01em;
+  color: var(--ink-soft);
+  line-height: 1.2;
+  max-width: 24rem;
+}
+
 .brand__tagline {
   font-family: var(--font);
   font-weight: 500;
@@ -316,6 +326,11 @@ a {
 
   .brand__name {
     font-size: clamp(1rem, 3vw, 1.15rem);
+  }
+
+  .brand__municipality {
+    font-size: 0.62rem;
+    max-width: 16rem;
   }
 
   .brand__tagline {

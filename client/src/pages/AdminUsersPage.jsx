@@ -13,11 +13,13 @@ const emptyForm = {
   password: '',
   fullName: '',
   role: 'user',
+  municipalityId: '',
 };
 
 export default function AdminUsersPage() {
   const { user: me } = useAuth();
   const [users, setUsers] = useState([]);
+  const [municipalities, setMunicipalities] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
   const [edit, setEdit] = useState({});
@@ -26,8 +28,16 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
-    const data = await api('/users');
-    setUsers(data);
+    const [userData, muniData] = await Promise.all([
+      api('/users'),
+      api('/municipalities?all=1'),
+    ]);
+    setUsers(userData);
+    setMunicipalities(muniData);
+    if (!form.municipalityId && muniData.length) {
+      const active = muniData.find((m) => m.isActive) || muniData[0];
+      setForm((prev) => ({ ...prev, municipalityId: String(active.id) }));
+    }
   };
 
   useEffect(() => {
@@ -44,6 +54,7 @@ export default function AdminUsersPage() {
     return () => {
       alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const create = async (e) => {
@@ -51,8 +62,20 @@ export default function AdminUsersPage() {
     setError('');
     setOk('');
     try {
-      await api('/users', { method: 'POST', body: form });
-      setForm(emptyForm);
+      const body = {
+        ...form,
+        municipalityId:
+          form.role === 'admin'
+            ? form.municipalityId
+              ? Number(form.municipalityId)
+              : null
+            : Number(form.municipalityId),
+      };
+      await api('/users', { method: 'POST', body });
+      setForm({
+        ...emptyForm,
+        municipalityId: form.municipalityId || (municipalities[0] ? String(municipalities[0].id) : ''),
+      });
       setOk('Пользователь создан');
       await load();
     } catch (err) {
@@ -67,6 +90,7 @@ export default function AdminUsersPage() {
       role: u.role,
       isActive: u.isActive,
       password: '',
+      municipalityId: u.municipalityId ? String(u.municipalityId) : '',
     });
   };
 
@@ -78,6 +102,12 @@ export default function AdminUsersPage() {
         fullName: edit.fullName,
         role: edit.role,
         isActive: edit.isActive,
+        municipalityId:
+          edit.role === 'admin'
+            ? edit.municipalityId
+              ? Number(edit.municipalityId)
+              : null
+            : Number(edit.municipalityId),
       };
       if (edit.password) body.password = edit.password;
       await api(`/users/${id}`, { method: 'PUT', body });
@@ -115,17 +145,27 @@ export default function AdminUsersPage() {
 
   if (loading) return <div className="loading">Загрузка…</div>;
 
+  const muniOptions = municipalities.filter((m) => m.isActive || true);
+
   return (
     <div>
       <h1 className="page-title">Пользователи</h1>
       <p className="page-sub">
-        Администратор — пользователи и конструктор. Редактор — конструктор и проведение.
-        Пользователь — только проведение опросов с доступом. При удалении пользователя его
-        проведения в истории остаются за администратором.
+        Администратор — пользователи и конструктор (видит все округа). Редактор и пользователь —
+        только свой округ. При удалении пользователя его проведения в истории остаются за
+        администратором.
       </p>
 
-      {error && <div className="alert" style={{ marginBottom: 12 }}>{error}</div>}
-      {ok && <div className="alert alert-ok" style={{ marginBottom: 12 }}>{ok}</div>}
+      {error && (
+        <div className="alert" style={{ marginBottom: 12 }}>
+          {error}
+        </div>
+      )}
+      {ok && (
+        <div className="alert alert-ok" style={{ marginBottom: 12 }}>
+          {ok}
+        </div>
+      )}
 
       <form className="panel stack" onSubmit={create} style={{ marginBottom: 20 }}>
         <h3 style={{ margin: 0 }}>Новый пользователь</h3>
@@ -167,6 +207,24 @@ export default function AdminUsersPage() {
             ))}
           </select>
         </div>
+        <div className="field">
+          <label>
+            Округ{form.role === 'admin' ? ' (необязательно)' : ''}
+          </label>
+          <select
+            value={form.municipalityId}
+            onChange={(e) => setForm({ ...form, municipalityId: e.target.value })}
+            required={form.role !== 'admin'}
+          >
+            {form.role === 'admin' && <option value="">— Все округа —</option>}
+            {muniOptions.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.nameShort} — {m.nameFull}
+                {!m.isActive ? ' (отключён)' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
         <button className="btn btn-primary" type="submit">
           Создать
         </button>
@@ -179,6 +237,7 @@ export default function AdminUsersPage() {
               <th>Логин</th>
               <th>ФИО</th>
               <th>Роль</th>
+              <th>Округ</th>
               <th>Статус</th>
               <th />
             </tr>
@@ -208,6 +267,20 @@ export default function AdminUsersPage() {
                       </select>
                     </td>
                     <td>
+                      <select
+                        value={edit.municipalityId}
+                        onChange={(e) => setEdit({ ...edit, municipalityId: e.target.value })}
+                        required={edit.role !== 'admin'}
+                      >
+                        {edit.role === 'admin' && <option value="">— Все округа —</option>}
+                        {muniOptions.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.nameShort}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
                       <label className="checkbox-row">
                         <input
                           type="checkbox"
@@ -226,10 +299,18 @@ export default function AdminUsersPage() {
                     </td>
                     <td>
                       <div className="row">
-                        <button type="button" className="btn btn-primary" onClick={() => saveEdit(u.id)}>
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() => saveEdit(u.id)}
+                        >
                           ОК
                         </button>
-                        <button type="button" className="btn btn-ghost" onClick={() => setEditId(null)}>
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          onClick={() => setEditId(null)}
+                        >
                           Отмена
                         </button>
                       </div>
@@ -240,6 +321,10 @@ export default function AdminUsersPage() {
                     <td>{u.login}</td>
                     <td>{u.fullName || '—'}</td>
                     <td>{ROLES.find((r) => r.value === u.role)?.label || u.role}</td>
+                    <td>
+                      {u.municipalityNameShort ||
+                        (u.role === 'admin' ? 'Все' : '—')}
+                    </td>
                     <td>{u.isActive ? 'Активен' : 'Отключён'}</td>
                     <td>
                       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>

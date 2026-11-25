@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, getToken } from '../api';
+import { useAuth } from '../auth';
 import { getApiBase } from '../lib/paths.js';
 import { relaxRequiredForSkippedQuestions, validateJumpConfiguration } from '../lib/jumpLogic';
 
@@ -42,9 +43,32 @@ function blankOption() {
 
 export default function ImportSurveyPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState(null);
+  const [municipalities, setMunicipalities] = useState([]);
+  const [municipalityId, setMunicipalityId] = useState(
+    user?.municipalityId ? String(user.municipalityId) : ''
+  );
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const munis = await api('/municipalities');
+        if (!alive) return;
+        setMunicipalities(munis);
+        if (!municipalityId && munis.length) setMunicipalityId(String(munis[0].id));
+      } catch {
+        /* ignore — commit will surface errors */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onFile = async (e) => {
     const file = e.target.files?.[0];
@@ -162,6 +186,7 @@ export default function ImportSurveyPage() {
       const body = {
         title: draft.title,
         description: draft.description,
+        municipalityId: municipalityId ? Number(municipalityId) : undefined,
         questions: draft.questions.map((q) => ({
           text: q.text,
           answerType: q.answerType,
@@ -200,6 +225,23 @@ export default function ImportSurveyPage() {
       {error && <div className="alert" style={{ marginBottom: 12 }}>{error}</div>}
 
       <div className="panel" style={{ marginBottom: 18 }}>
+        {municipalities.length > 0 && (
+          <div className="field" style={{ marginBottom: 12 }}>
+            <label htmlFor="muni">Округ для черновика</label>
+            <select
+              id="muni"
+              value={municipalityId}
+              onChange={(e) => setMunicipalityId(e.target.value)}
+              disabled={busy}
+            >
+              {municipalities.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.nameShort} — {m.nameFull}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="field">
           <label htmlFor="docx">Файл Word (.docx)</label>
           <input

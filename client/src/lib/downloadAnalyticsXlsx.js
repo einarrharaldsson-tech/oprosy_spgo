@@ -132,11 +132,11 @@ function buildFrequencyRows(question, items) {
   return rows;
 }
 
-function writeMunicipalityBlock(ws, startRow, district, total) {
+function writeMunicipalityBlock(ws, startRow, district, total, districtFull) {
   let r = startRow;
   ws.mergeCells(r, 1, r, 2);
   styleTitle(ws.getCell(r, 1));
-  ws.getCell(r, 1).value = 'Сергиево - Посадский городской округ';
+  ws.getCell(r, 1).value = districtFull || district || DISTRICT_CODE;
   applyBorder(ws.getCell(r, 2));
   r += 1;
 
@@ -246,9 +246,26 @@ function writeQuestionBlock(ws, startRow, questionText, district, rows, totalRes
  * Build and download the municipal «проблематика» XLSX report
  * (layout matches the official template; district column = СПГО).
  */
-export async function downloadAnalyticsXlsx({ survey, items, district = DISTRICT_CODE, filename }) {
+export async function downloadAnalyticsXlsx({
+  survey,
+  items,
+  district,
+  districtFull,
+  filename,
+}) {
   const total = items?.length || 0;
   if (!total) throw new Error('Нет данных для Excel-отчёта');
+
+  const resolvedCode =
+    district ||
+    survey?.municipality?.nameShort ||
+    survey?.municipalityNameShort ||
+    DISTRICT_CODE;
+  const resolvedFull =
+    districtFull ||
+    survey?.municipality?.nameFull ||
+    survey?.municipalityNameFull ||
+    resolvedCode;
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Реплика';
@@ -264,7 +281,7 @@ export async function downloadAnalyticsXlsx({ survey, items, district = DISTRICT
   ws.getColumn(4).width = 32;
 
   let row = 1;
-  row = writeMunicipalityBlock(ws, row, district, total);
+  row = writeMunicipalityBlock(ws, row, resolvedCode, total, resolvedFull);
 
   const questions = (survey?.questions || []).filter(isChoiceQuestion);
   for (const question of questions) {
@@ -273,7 +290,7 @@ export async function downloadAnalyticsXlsx({ survey, items, district = DISTRICT
       ws,
       row,
       String(question.text || '').trim() || 'Вопрос',
-      district,
+      resolvedCode,
       rows,
       total
     );
@@ -286,7 +303,7 @@ export async function downloadAnalyticsXlsx({ survey, items, district = DISTRICT
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = filename || analyticsXlsxFilename(district);
+  a.download = filename || analyticsXlsxFilename(resolvedCode);
   document.body.appendChild(a);
   a.click();
   a.remove();

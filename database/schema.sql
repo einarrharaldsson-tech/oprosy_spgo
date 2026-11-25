@@ -5,15 +5,29 @@ CREATE DATABASE IF NOT EXISTS oprosy
 
 USE oprosy;
 
+CREATE TABLE IF NOT EXISTS municipalities (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  inn VARCHAR(12) NOT NULL,
+  name_full VARCHAR(255) NOT NULL,
+  name_short VARCHAR(64) NOT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_municipalities_inn (inn),
+  UNIQUE KEY uq_municipalities_short (name_short)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS users (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   login VARCHAR(64) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
   full_name VARCHAR(255) NOT NULL DEFAULT '',
   role ENUM('admin', 'editor', 'user') NOT NULL DEFAULT 'user',
+  municipality_id INT UNSIGNED NULL,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_users_municipality FOREIGN KEY (municipality_id) REFERENCES municipalities(id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS surveys (
@@ -23,11 +37,13 @@ CREATE TABLE IF NOT EXISTS surveys (
   conduct_mode ENUM('scroll', 'step') NOT NULL DEFAULT 'scroll',
   status ENUM('draft', 'active', 'completed', 'archived') NOT NULL DEFAULT 'draft',
   created_by INT UNSIGNED NOT NULL,
+  municipality_id INT UNSIGNED NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   archived_at TIMESTAMP NULL,
   completed_at TIMESTAMP NULL,
-  CONSTRAINT fk_surveys_created_by FOREIGN KEY (created_by) REFERENCES users(id)
+  CONSTRAINT fk_surveys_created_by FOREIGN KEY (created_by) REFERENCES users(id),
+  CONSTRAINT fk_surveys_municipality FOREIGN KEY (municipality_id) REFERENCES municipalities(id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS survey_access (

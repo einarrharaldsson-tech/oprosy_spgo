@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import { useAuth } from '../auth';
 
 const STATUS = {
   active: { label: 'Активен', className: 'badge-active' },
@@ -11,8 +12,14 @@ const STATUS = {
 
 export default function ConstructorListPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [items, setItems] = useState([]);
   const [title, setTitle] = useState('');
+  const [municipalityId, setMunicipalityId] = useState(
+    user?.municipalityId ? String(user.municipalityId) : ''
+  );
+  const [municipalities, setMunicipalities] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
@@ -27,6 +34,14 @@ export default function ConstructorListPage() {
     (async () => {
       try {
         await load();
+        if (isAdmin) {
+          const munis = await api('/municipalities');
+          if (!alive) return;
+          setMunicipalities(munis);
+          if (!municipalityId && munis.length) {
+            setMunicipalityId(String(munis[0].id));
+          }
+        }
       } catch (err) {
         if (alive) setError(err.message);
       } finally {
@@ -36,15 +51,18 @@ export default function ConstructorListPage() {
     return () => {
       alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const create = async (e) => {
     e.preventDefault();
     setError('');
     try {
+      const body = { title: title.trim() || 'Новый опрос' };
+      if (isAdmin && municipalityId) body.municipalityId = Number(municipalityId);
       const survey = await api('/surveys', {
         method: 'POST',
-        body: { title: title.trim() || 'Новый опрос' },
+        body,
       });
       navigate(`/admin/constructor/${survey.id}`);
     } catch (err) {
@@ -94,7 +112,7 @@ export default function ConstructorListPage() {
 
       {error && <div className="alert" style={{ marginBottom: 12 }}>{error}</div>}
 
-      <form className="panel row" onSubmit={create} style={{ marginBottom: 18 }}>
+      <form className="panel row" onSubmit={create} style={{ marginBottom: 18, flexWrap: 'wrap' }}>
         <div className="field" style={{ flex: 1, minWidth: 200 }}>
           <label>Название нового опроса</label>
           <input
@@ -103,6 +121,22 @@ export default function ConstructorListPage() {
             placeholder="Например: Оценка сервиса"
           />
         </div>
+        {isAdmin && municipalities.length > 0 && (
+          <div className="field" style={{ minWidth: 220 }}>
+            <label>Округ</label>
+            <select
+              value={municipalityId}
+              onChange={(e) => setMunicipalityId(e.target.value)}
+              required
+            >
+              {municipalities.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.nameShort} — {m.nameFull}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <button className="btn btn-primary" type="submit" style={{ alignSelf: 'flex-end' }}>
           Создать
         </button>
@@ -127,6 +161,7 @@ export default function ConstructorListPage() {
                   {s.description && <p>{s.description}</p>}
                   <p className="muted" style={{ marginTop: 8, fontSize: '0.85rem' }}>
                     Ответов: {s.responseCount}
+                    {s.municipalityNameShort ? ` · ${s.municipalityNameShort}` : ''}
                   </p>
                 </Link>
                 {s.status === 'draft' && (
