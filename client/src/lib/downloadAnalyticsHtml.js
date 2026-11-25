@@ -398,12 +398,11 @@ export async function buildAnalyticsHtmlString({
   );
 
   slides.push(slide(2, 'География исследования — обзор', mapBlock, ctx));
-  slides.push(slide(3, 'География исследования — фрагменты', mapBlock, ctx));
-  slides.push(slide(4, 'География исследования — детализация', mapBlock, ctx));
 
+  let n = 3;
   slides.push(
     slide(
-      5,
+      n++,
       'Половозрастной профиль опрошенных',
       `<div class="split-2">` +
         `<div class="chart-block"><h3>Пол</h3><div class="pie-wrap">${svgPie(genderRows)}${legend(genderRows)}</div></div>` +
@@ -415,7 +414,7 @@ export async function buildAnalyticsHtmlString({
 
   slides.push(
     slide(
-      6,
+      n++,
       'Профессиональный профиль',
       `<div class="chart-block"><h3>${escapeHtml(slots.profession?.questionText || 'Сфера / занятие')}</h3>${barList(professionRows)}</div>`,
       ctx
@@ -424,7 +423,7 @@ export async function buildAnalyticsHtmlString({
 
   slides.push(
     slide(
-      7,
+      n++,
       'Общая оценка положения дел в округе',
       `<div class="chart-block"><h3>${escapeHtml(slots.overall?.questionText || 'Общая ситуация')}</h3>${barList(overallRows)}</div>` +
         `<div class="chart-block"><h3>${escapeHtml(slots.head?.questionText || 'Оценка главы')}</h3>${barList(headRows)}</div>`,
@@ -432,10 +431,10 @@ export async function buildAnalyticsHtmlString({
     )
   );
 
-  sphereBlocks.forEach((block, i) => {
+  sphereBlocks.forEach((block) => {
     slides.push(
       slide(
-        8 + i,
+        n++,
         `Удовлетворённость сферой`,
         `<div class="chart-block"><h3>${escapeHtml(block.title)}</h3>` +
           `<div class="pie-wrap">${svgPie(block.rows)}${legend(block.rows)}</div></div>`,
@@ -446,7 +445,7 @@ export async function buildAnalyticsHtmlString({
 
   slides.push(
     slide(
-      11,
+      n++,
       'Источники информации',
       `<div class="chart-block"><h3>${escapeHtml(slots.sources?.questionText || 'Источники')}</h3>${barList(sourceRows)}</div>`,
       ctx
@@ -455,7 +454,7 @@ export async function buildAnalyticsHtmlString({
 
   slides.push(
     slide(
-      12,
+      n++,
       'Взаимодействие с администрацией',
       interactionBlocks
         .map(
