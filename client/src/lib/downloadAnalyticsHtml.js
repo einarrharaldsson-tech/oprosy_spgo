@@ -191,9 +191,9 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
 .geo-grid img { width: 100%; height: auto; max-height: 520px; object-fit: contain; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
 .split-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
 .chart-block h3 { margin: 0 0 12px; font-size: 1.05rem; color: var(--brand); }
-.pie-wrap { display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: center; }
-.legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.legend li { display: grid; grid-template-columns: 14px 1fr auto; gap: 10px; align-items: center; font-size: 0.95rem; }
+.pie-wrap { display: grid; grid-template-columns: auto minmax(160px, max-content); gap: 18px; align-items: center; justify-content: start; }
+.legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; width: max-content; max-width: 320px; }
+.legend li { display: grid; grid-template-columns: 14px max-content auto; gap: 10px 12px; align-items: center; font-size: 0.95rem; }
 .swatch { width: 14px; height: 14px; display: block; flex: 0 0 auto; }
 .val { font-weight: 700; color: var(--brand); }
 .bars { display: grid; gap: 10px; }
@@ -236,7 +236,7 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
     border: 0 !important;
     border-radius: 0 !important;
     margin: 0 !important;
-    padding: 10mm 12mm !important;
+    padding: 8mm 10mm !important;
     min-height: 0 !important;
     width: 297mm;
     height: 210mm;
@@ -251,34 +251,55 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
     page-break-after: auto;
     break-after: auto;
   }
+  /* Keep desktop composition (2 columns) — never use narrow/mobile stacking in print. */
+  .slide-scale { width: 1100px !important; max-width: none !important; }
+  .split-2 { grid-template-columns: 1fr 1fr !important; gap: 28px !important; }
+  .pie-wrap {
+    grid-template-columns: auto minmax(160px, max-content) !important;
+    gap: 16px !important;
+    justify-content: start !important;
+  }
+  .bar-row { grid-template-columns: minmax(140px, 32%) 1fr 58px !important; }
+  .legend { width: max-content !important; max-width: 300px !important; gap: 8px; }
+  .legend li {
+    grid-template-columns: 14px max-content auto !important;
+    gap: 8px 12px !important;
+    font-size: 0.92rem;
+  }
   .title-slide { min-height: 0 !important; height: 210mm; }
-  .title-hero { padding: 18px 8px; gap: 12px; }
-  .title-hero img.gerb { width: 110px; }
-  .title-hero h1 { font-size: 1.55rem; }
-  .slide-titles h2 { font-size: 1.15rem; }
-  .pie { width: 170px !important; height: 170px !important; }
-  .geo-grid img { max-height: 145mm; }
-  .slide-body { gap: 12px; }
-  .chart-block h3 { margin-bottom: 8px; font-size: 0.95rem; }
-  .bars { gap: 7px; }
-  .bar-svg { height: 11px; }
-  .legend { gap: 5px; }
-  .legend li { font-size: 0.85rem; }
+  .title-hero { padding: 24px 8px; gap: 14px; }
+  .title-hero img.gerb { width: 120px; }
+  .title-hero h1 { font-size: 1.7rem; }
+  .slide-head { margin-bottom: 18px; padding-bottom: 12px; }
+  .slide-titles h2 { font-size: 1.28rem; }
+  .ctx { font-size: 0.88rem; }
+  .pie { width: 200px !important; height: 200px !important; }
+  .geo-grid img { max-height: 140mm; }
+  .slide-body { gap: 16px; }
+  .chart-block h3 { margin-bottom: 10px; font-size: 1rem; }
+  .bars { gap: 8px; }
+  .bar-svg { height: 12px; }
 }
-@media (max-width: 800px) {
+/* Mobile stacking only on screen — never when printing to PDF. */
+@media screen and (max-width: 800px) {
   .split-2, .pie-wrap, .bar-row { grid-template-columns: 1fr; }
+  .pie-wrap { justify-content: stretch; }
+  .legend { max-width: none; width: 100%; }
+  .legend li { grid-template-columns: 14px 1fr auto; }
   .bar-val { text-align: left; }
 }
 `.trim();
 }
 
 function buildPrintFitScript() {
-  // Scales each slide's inner content to fit one landscape A4 page when printing.
+  // Layout at fixed desktop width (1100px), then scale to one landscape A4 page.
+  // Avoids print engines applying narrow/mobile CSS and stretching legends.
   return `<script>(function(){
   var PAGE_W = 297;
   var PAGE_H = 210;
-  var PAD_X = 24;
-  var PAD_Y = 20;
+  var PAD_X = 20;
+  var PAD_Y = 16;
+  var DESIGN_W = 1100;
   function mmToPx(mm){ return mm * 96 / 25.4; }
   function fitSlides(){
     var slides = document.querySelectorAll('.slide');
@@ -293,20 +314,23 @@ function buildPrintFitScript() {
         slide.appendChild(inner);
       }
       inner.style.transform = 'none';
-      inner.style.width = '100%';
+      inner.style.width = DESIGN_W + 'px';
+      inner.style.maxWidth = 'none';
       void inner.offsetHeight;
       var rect = inner.getBoundingClientRect();
-      var scale = Math.min(1, availW / Math.max(rect.width, 1), availH / Math.max(rect.height, 1));
+      var scaleW = availW / DESIGN_W;
+      var scaleH = availH / Math.max(rect.height, 1);
+      var scale = Math.min(1, scaleW, scaleH);
       if (!isFinite(scale) || scale <= 0) scale = 1;
       inner.style.transformOrigin = 'top left';
       inner.style.transform = 'scale(' + scale + ')';
-      inner.style.width = (100 / scale) + '%';
     });
   }
   function clearFit(){
     document.querySelectorAll('.slide-scale').forEach(function(inner){
       inner.style.transform = '';
       inner.style.width = '';
+      inner.style.maxWidth = '';
     });
   }
   window.addEventListener('beforeprint', fitSlides);
@@ -449,7 +473,7 @@ export async function buildAnalyticsHtmlString({
     `<title>${escapeHtml(`${DISTRICT_CODE} - проблематика в ${quarterCode}`)}</title>` +
     `<style>${buildCss()}</style></head><body>` +
     `<div class="toolbar-print"><button type="button" onclick="window.print()">Печать / PDF</button>` +
-    `<span class="note">Цифры совпадают с аналитикой · ${escapeHtml(String(total))} проведений · PDF: альбомная A4; при необходимости включите «Фоновая графика»</span></div>` +
+    `<span class="note">Цифры совпадают с аналитикой · ${escapeHtml(String(total))} проведений · PDF: альбомная A4, поля «Нет» / минимальные</span></div>` +
     `<main class="deck">${slides.join('\n')}</main>` +
     buildPrintFitScript() +
     `</body></html>`
