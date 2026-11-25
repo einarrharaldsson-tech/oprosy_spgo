@@ -81,7 +81,8 @@ function legend(rows) {
   return `<ul class="legend">${rows
     .map(
       (r) =>
-        `<li><span class="swatch" style="background:${escapeHtml(r.color)}"></span>` +
+        `<li><svg class="swatch" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">` +
+        `<rect x="0" y="0" width="14" height="14" rx="3" fill="${escapeHtml(r.color)}"/></svg>` +
         `<span class="lab">${escapeHtml(r.label)}</span>` +
         `<span class="val">${pct(r.percent, true)}</span></li>`
     )
@@ -90,13 +91,20 @@ function legend(rows) {
 
 function barList(rows) {
   if (!rows.length) return `<p class="muted">Нет данных</p>`;
+  // SVG bars survive PDF print even when browser "background graphics" is off.
   return `<div class="bars">${rows
     .map((r) => {
       const w = Math.max(0, Math.min(100, r.percent));
+      const fillW = Math.max(w > 0 ? 1.2 : 0, w);
       return (
         `<div class="bar-row">` +
         `<div class="bar-lab">${escapeHtml(r.label)}</div>` +
-        `<div class="bar-track"><div class="bar-fill" style="width:${w}%;background:${escapeHtml(r.color)}"></div></div>` +
+        `<svg class="bar-svg" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label="${escapeHtml(pct(r.percent, true))}">` +
+        `<rect class="bar-track-svg" x="0" y="1.5" width="100" height="7" rx="3.5" fill="#e7eeee"/>` +
+        (fillW > 0
+          ? `<rect class="bar-fill-svg" x="0" y="1.5" width="${fillW}" height="7" rx="3.5" fill="${escapeHtml(r.color)}"/>`
+          : '') +
+        `</svg>` +
         `<div class="bar-val">${pct(r.percent, true)}</div>` +
         `</div>`
       );
@@ -186,14 +194,18 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
 .pie-wrap { display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: center; }
 .legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .legend li { display: grid; grid-template-columns: 14px 1fr auto; gap: 10px; align-items: center; font-size: 0.95rem; }
-.swatch { width: 14px; height: 14px; border-radius: 3px; }
+.swatch { width: 14px; height: 14px; display: block; flex: 0 0 auto; }
 .val { font-weight: 700; color: var(--brand); }
 .bars { display: grid; gap: 10px; }
 .bar-row { display: grid; grid-template-columns: minmax(120px, 34%) 1fr 56px; gap: 10px; align-items: center; }
 .bar-lab { font-size: 0.9rem; line-height: 1.25; }
-.bar-track { height: 14px; background: #e7eeee; border-radius: 999px; overflow: hidden; }
-.bar-fill { height: 100%; border-radius: 999px; }
+.bar-svg { width: 100%; height: 14px; display: block; overflow: visible; }
 .bar-val { text-align: right; font-weight: 700; color: var(--brand); font-size: 0.9rem; }
+.pie, .bar-svg, .swatch, .slide-num {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+  color-adjust: exact;
+}
 .muted { color: var(--muted); }
 .note { font-size: 0.85rem; color: var(--muted); }
 .toolbar-print {
@@ -211,6 +223,11 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
   margin: 0;
 }
 @media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
   .toolbar-print { display: none !important; }
   html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
   .deck { max-width: none; width: 100%; margin: 0; padding: 0; }
@@ -244,7 +261,7 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
   .slide-body { gap: 12px; }
   .chart-block h3 { margin-bottom: 8px; font-size: 0.95rem; }
   .bars { gap: 7px; }
-  .bar-track { height: 11px; }
+  .bar-svg { height: 11px; }
   .legend { gap: 5px; }
   .legend li { font-size: 0.85rem; }
 }
@@ -432,7 +449,7 @@ export async function buildAnalyticsHtmlString({
     `<title>${escapeHtml(`${DISTRICT_CODE} - проблематика в ${quarterCode}`)}</title>` +
     `<style>${buildCss()}</style></head><body>` +
     `<div class="toolbar-print"><button type="button" onclick="window.print()">Печать / PDF</button>` +
-    `<span class="note">Цифры совпадают с аналитикой · ${escapeHtml(String(total))} проведений · для PDF: альбомная A4, поля «По умолчанию» / без полей</span></div>` +
+    `<span class="note">Цифры совпадают с аналитикой · ${escapeHtml(String(total))} проведений · PDF: альбомная A4; при необходимости включите «Фоновая графика»</span></div>` +
     `<main class="deck">${slides.join('\n')}</main>` +
     buildPrintFitScript() +
     `</body></html>`
