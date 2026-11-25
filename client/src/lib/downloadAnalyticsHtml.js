@@ -252,31 +252,53 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
     break-after: auto;
   }
   /* Keep desktop composition (2 columns) — never use narrow/mobile stacking in print. */
-  .slide-scale { width: 1100px !important; max-width: none !important; }
-  .split-2 { grid-template-columns: 1fr 1fr !important; gap: 28px !important; }
+  .slide {
+    display: flex;
+    flex-direction: column;
+  }
+  .slide-scale {
+    width: 100% !important;
+    max-width: none !important;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .split-2 { grid-template-columns: 1fr 1fr !important; gap: 32px !important; }
   .pie-wrap {
     grid-template-columns: auto minmax(160px, max-content) !important;
-    gap: 16px !important;
+    gap: 20px !important;
     justify-content: start !important;
+    align-items: center !important;
   }
   .bar-row { grid-template-columns: minmax(140px, 32%) 1fr 58px !important; }
-  .legend { width: max-content !important; max-width: 300px !important; gap: 8px; }
+  .legend { width: max-content !important; max-width: 320px !important; gap: 10px; }
   .legend li {
     grid-template-columns: 14px max-content auto !important;
     gap: 8px 12px !important;
-    font-size: 0.92rem;
+    font-size: 1rem;
   }
   .title-slide { min-height: 0 !important; height: 210mm; }
   .title-hero { padding: 24px 8px; gap: 14px; }
   .title-hero img.gerb { width: 120px; }
   .title-hero h1 { font-size: 1.7rem; }
-  .slide-head { margin-bottom: 18px; padding-bottom: 12px; }
+  .slide-head { margin-bottom: 18px; padding-bottom: 12px; flex: 0 0 auto; }
   .slide-titles h2 { font-size: 1.28rem; }
   .ctx { font-size: 0.88rem; }
-  .pie { width: 200px !important; height: 200px !important; }
+  /* Keep pies at full visual size — do not shrink vs on-screen HTML. */
+  .pie { width: 280px !important; height: 280px !important; max-width: none !important; }
+  .slide--pies .pie { width: 300px !important; height: 300px !important; }
   .geo-grid img { max-height: 140mm; }
-  .slide-body { gap: 16px; }
-  .chart-block h3 { margin-bottom: 10px; font-size: 1rem; }
+  .slide-body {
+    gap: 18px;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 0;
+  }
+  .slide--pies .slide-body { justify-content: center; }
+  .chart-block h3 { margin-bottom: 12px; font-size: 1.05rem; }
   .bars { gap: 8px; }
   .bar-svg { height: 12px; }
 }
@@ -292,14 +314,14 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
 }
 
 function buildPrintFitScript() {
-  // Layout at fixed desktop width (1100px), then scale to one landscape A4 page.
-  // Avoids print engines applying narrow/mobile CSS and stretching legends.
+  // Fit each slide to one landscape A4 page.
+  // Short pie slides must NOT be over-shrunk: use page-width layout, enlarge pies,
+  // and scale down only when content actually overflows the printable area.
   return `<script>(function(){
   var PAGE_W = 297;
   var PAGE_H = 210;
   var PAD_X = 20;
   var PAD_Y = 16;
-  var DESIGN_W = 1100;
   function mmToPx(mm){ return mm * 96 / 25.4; }
   function fitSlides(){
     var slides = document.querySelectorAll('.slide');
@@ -313,17 +335,30 @@ function buildPrintFitScript() {
         while (slide.firstChild) inner.appendChild(slide.firstChild);
         slide.appendChild(inner);
       }
+      var pies = inner.querySelectorAll('.pie');
+      if (pies.length) slide.classList.add('slide--pies');
+      else slide.classList.remove('slide--pies');
+
       inner.style.transform = 'none';
-      inner.style.width = DESIGN_W + 'px';
+      inner.style.width = Math.floor(availW) + 'px';
       inner.style.maxWidth = 'none';
+      inner.style.height = '';
+      pies.forEach(function(p){
+        var size = pies.length <= 2 ? 300 : 260;
+        p.style.width = size + 'px';
+        p.style.height = size + 'px';
+      });
       void inner.offsetHeight;
+
       var rect = inner.getBoundingClientRect();
-      var scaleW = availW / DESIGN_W;
-      var scaleH = availH / Math.max(rect.height, 1);
-      var scale = Math.min(1, scaleW, scaleH);
+      var scale = 1;
+      if (rect.height > availH + 0.5) scale = availH / rect.height;
+      if (rect.width > availW + 0.5) scale = Math.min(scale, availW / rect.width);
       if (!isFinite(scale) || scale <= 0) scale = 1;
+      // Never upscale; only shrink overflow. Short pie slides stay full size.
+      if (scale > 1) scale = 1;
       inner.style.transformOrigin = 'top left';
-      inner.style.transform = 'scale(' + scale + ')';
+      inner.style.transform = scale < 0.999 ? ('scale(' + scale + ')') : 'none';
     });
   }
   function clearFit(){
@@ -331,7 +366,13 @@ function buildPrintFitScript() {
       inner.style.transform = '';
       inner.style.width = '';
       inner.style.maxWidth = '';
+      inner.style.height = '';
+      inner.querySelectorAll('.pie').forEach(function(p){
+        p.style.width = '';
+        p.style.height = '';
+      });
     });
+    document.querySelectorAll('.slide--pies').forEach(function(s){ s.classList.remove('slide--pies'); });
   }
   window.addEventListener('beforeprint', fitSlides);
   window.addEventListener('afterprint', clearFit);
