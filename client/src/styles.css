@@ -497,6 +497,50 @@ a {
   width: 100%;
 }
 
+.btn-sm {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 650;
+  gap: 4px;
+}
+
+.users-section {
+  margin-bottom: 18px;
+}
+
+.users-section__title {
+  margin: 0 0 10px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--brand);
+}
+
+.users-section__meta {
+  margin: 0 0 10px;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.users-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.table.table--users th,
+.table.table--users td {
+  padding: 8px 8px;
+}
+
+.table.table--users td:last-child {
+  white-space: nowrap;
+  width: 1%;
+}
+
 .field {
   display: flex;
   flex-direction: column;

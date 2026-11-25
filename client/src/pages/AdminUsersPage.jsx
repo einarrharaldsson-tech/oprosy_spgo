@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { useAuth } from '../auth';
 
@@ -20,6 +20,18 @@ const emptyForm = {
   role: 'user',
   municipalityId: '',
 };
+
+function roleLabel(role) {
+  return ALL_ROLES.find((r) => r.value === role)?.label || role;
+}
+
+function sortUsers(list) {
+  return [...list].sort((a, b) => {
+    const an = (a.fullName || a.login || '').toLocaleLowerCase('ru');
+    const bn = (b.fullName || b.login || '').toLocaleLowerCase('ru');
+    return an.localeCompare(bn, 'ru');
+  });
+}
 
 export default function AdminUsersPage() {
   const { user: me } = useAuth();
@@ -71,6 +83,43 @@ export default function AdminUsersPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const grouped = useMemo(() => {
+    const admins = sortUsers(users.filter((u) => u.role === 'admin'));
+    const others = users.filter((u) => u.role !== 'admin');
+    const byMuni = new Map();
+    for (const u of others) {
+      const key = u.municipalityId != null ? String(u.municipalityId) : 'none';
+      if (!byMuni.has(key)) byMuni.set(key, []);
+      byMuni.get(key).push(u);
+    }
+    const muniOrder = municipalities.map((m) => String(m.id));
+    const keys = [...byMuni.keys()].sort((a, b) => {
+      if (a === 'none') return 1;
+      if (b === 'none') return -1;
+      const ia = muniOrder.indexOf(a);
+      const ib = muniOrder.indexOf(b);
+      if (ia === -1 && ib === -1) {
+        const na = byMuni.get(a)[0]?.municipalityNameFull || '';
+        const nb = byMuni.get(b)[0]?.municipalityNameFull || '';
+        return na.localeCompare(nb, 'ru');
+      }
+      if (ia === -1) return 1;
+      if (ib === -1) return -1;
+      return ia - ib;
+    });
+    const blocks = keys.map((key) => {
+      const list = sortUsers(byMuni.get(key));
+      const m = municipalities.find((x) => String(x.id) === key);
+      const title = m
+        ? `${m.nameShort} — ${m.nameFull}`
+        : list[0]?.municipalityNameFull ||
+          list[0]?.municipalityNameShort ||
+          'Без округа';
+      return { key, title, short: m?.nameShort || list[0]?.municipalityNameShort || '—', users: list };
+    });
+    return { admins, blocks };
+  }, [users, municipalities]);
 
   const create = async (e) => {
     e.preventDefault();
@@ -200,13 +249,171 @@ export default function AdminUsersPage() {
     municipalities.find((m) => Number(m.id) === Number(me?.municipalityId))?.nameFull ||
     '';
 
+  const renderRow = (u, { showMunicipality }) => {
+    if (editId === u.id) {
+      return (
+        <tr key={u.id}>
+          <td>{u.login}</td>
+          <td>
+            <input
+              value={edit.fullName}
+              onChange={(e) => setEdit({ ...edit, fullName: e.target.value })}
+            />
+          </td>
+          <td>
+            <select
+              value={edit.role}
+              onChange={(e) => setEdit({ ...edit, role: e.target.value })}
+            >
+              {roleOptions.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </td>
+          {showMunicipality && (
+            <td>
+              {isAdmin ? (
+                <select
+                  value={edit.municipalityId}
+                  onChange={(e) => setEdit({ ...edit, municipalityId: e.target.value })}
+                  required={edit.role !== 'admin'}
+                >
+                  {edit.role === 'admin' && <option value="">— Все округа —</option>}
+                  {muniOptions.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.nameShort}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                u.municipalityNameShort || myMuniLabel || '—'
+              )}
+            </td>
+          )}
+          <td>
+            {isAdmin && (
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={edit.isActive}
+                  onChange={(e) => setEdit({ ...edit, isActive: e.target.checked })}
+                />
+                Активен
+              </label>
+            )}
+            {!isAdmin && (u.isActive ? 'Активен' : 'Заблокирован')}
+            <input
+              type="password"
+              placeholder="Новый пароль"
+              value={edit.password}
+              onChange={(e) => setEdit({ ...edit, password: e.target.value })}
+              style={{ marginTop: 6, width: '100%' }}
+            />
+          </td>
+          <td>
+            <div className="users-actions">
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => saveEdit(u.id)}
+              >
+                ОК
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setEditId(null)}
+              >
+                Отмена
+              </button>
+            </div>
+          </td>
+        </tr>
+      );
+    }
+
+    return (
+      <tr key={u.id}>
+        <td>{u.login}</td>
+        <td>{u.fullName || '—'}</td>
+        <td>{roleLabel(u.role)}</td>
+        {showMunicipality && (
+          <td>
+            {u.municipalityNameShort || (u.role === 'admin' ? 'Все' : '—')}
+          </td>
+        )}
+        <td>{u.isActive ? 'Активен' : 'Заблокирован'}</td>
+        <td>
+          <div className="users-actions">
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => startEdit(u)}
+            >
+              Изменить
+            </button>
+            {isAdmin && me?.id !== u.id && (
+              <button
+                type="button"
+                className={`btn btn-sm ${u.isActive ? 'btn-danger' : 'btn-primary'}`}
+                disabled={busyId === u.id}
+                onClick={() => setBlocked(u, u.isActive)}
+              >
+                {u.isActive ? 'Блок' : 'Разблок'}
+              </button>
+            )}
+            {me?.id !== u.id && (
+              <button
+                type="button"
+                className="btn btn-danger btn-sm"
+                onClick={() => removeUser(u)}
+              >
+                Удалить
+              </button>
+            )}
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
+  const renderTable = (list, { showMunicipality }) => (
+    <div className="panel" style={{ overflowX: 'auto' }}>
+      <table className="table table--users">
+        <thead>
+          <tr>
+            <th>Логин</th>
+            <th>ФИО</th>
+            <th>Роль</th>
+            {showMunicipality && <th>Округ</th>}
+            <th>Статус</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {list.length ? (
+            list.map((u) => renderRow(u, { showMunicipality }))
+          ) : (
+            <tr>
+              <td colSpan={showMunicipality ? 6 : 5} className="muted">
+                Нет пользователей
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+
   return (
     <div>
       <h1 className="page-title">Пользователи</h1>
       <p className="page-sub">
         {isAdmin
-          ? 'Администратор управляет всеми пользователями и может блокировать вход. Редактор и пользователь видят только свой округ.'
-          : `Редактор создаёт пользователей только своего округа${myMuniLabel ? ` («${myMuniLabel}»)` : ''}. Блокировать учётные записи может только администратор.`}
+          ? 'Администраторы — отдельно; остальные сгруппированы по округам. Блокировка входа доступна только администратору.'
+          : `Редактор создаёт пользователей только своего округа${myMuniLabel ? ` («${myMuniLabel}»)` : ''}.`}
       </p>
 
       {error && (
@@ -290,142 +497,32 @@ export default function AdminUsersPage() {
         </button>
       </form>
 
-      <div className="panel" style={{ overflowX: 'auto' }}>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Логин</th>
-              <th>ФИО</th>
-              <th>Роль</th>
-              <th>Округ</th>
-              <th>Статус</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id}>
-                {editId === u.id ? (
-                  <>
-                    <td>{u.login}</td>
-                    <td>
-                      <input
-                        value={edit.fullName}
-                        onChange={(e) => setEdit({ ...edit, fullName: e.target.value })}
-                      />
-                    </td>
-                    <td>
-                      <select
-                        value={edit.role}
-                        onChange={(e) => setEdit({ ...edit, role: e.target.value })}
-                      >
-                        {roleOptions.map((r) => (
-                          <option key={r.value} value={r.value}>
-                            {r.label}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td>
-                      {isAdmin ? (
-                        <select
-                          value={edit.municipalityId}
-                          onChange={(e) => setEdit({ ...edit, municipalityId: e.target.value })}
-                          required={edit.role !== 'admin'}
-                        >
-                          {edit.role === 'admin' && <option value="">— Все округа —</option>}
-                          {muniOptions.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.nameShort}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        u.municipalityNameShort || myMuniLabel || '—'
-                      )}
-                    </td>
-                    <td>
-                      {isAdmin && (
-                        <label className="checkbox-row">
-                          <input
-                            type="checkbox"
-                            checked={edit.isActive}
-                            onChange={(e) => setEdit({ ...edit, isActive: e.target.checked })}
-                          />
-                          Активен
-                        </label>
-                      )}
-                      {!isAdmin && (u.isActive ? 'Активен' : 'Заблокирован')}
-                      <input
-                        type="password"
-                        placeholder="Новый пароль"
-                        value={edit.password}
-                        onChange={(e) => setEdit({ ...edit, password: e.target.value })}
-                        style={{ marginTop: 6, width: '100%' }}
-                      />
-                    </td>
-                    <td>
-                      <div className="row">
-                        <button
-                          type="button"
-                          className="btn btn-primary"
-                          onClick={() => saveEdit(u.id)}
-                        >
-                          ОК
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-ghost"
-                          onClick={() => setEditId(null)}
-                        >
-                          Отмена
-                        </button>
-                      </div>
-                    </td>
-                  </>
-                ) : (
-                  <>
-                    <td>{u.login}</td>
-                    <td>{u.fullName || '—'}</td>
-                    <td>{ALL_ROLES.find((r) => r.value === u.role)?.label || u.role}</td>
-                    <td>
-                      {u.municipalityNameShort ||
-                        (u.role === 'admin' ? 'Все' : '—')}
-                    </td>
-                    <td>{u.isActive ? 'Активен' : 'Заблокирован'}</td>
-                    <td>
-                      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-                        <button type="button" className="btn btn-ghost" onClick={() => startEdit(u)}>
-                          Изменить
-                        </button>
-                        {isAdmin && me?.id !== u.id && (
-                          <button
-                            type="button"
-                            className={u.isActive ? 'btn btn-danger' : 'btn btn-primary'}
-                            disabled={busyId === u.id}
-                            onClick={() => setBlocked(u, u.isActive)}
-                          >
-                            {u.isActive ? 'Заблокировать' : 'Разблокировать'}
-                          </button>
-                        )}
-                        {me?.id !== u.id && (
-                          <button
-                            type="button"
-                            className="btn btn-danger"
-                            onClick={() => removeUser(u)}
-                          >
-                            Удалить
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {isAdmin && (
+        <section className="users-section">
+          <h2 className="users-section__title">Администраторы</h2>
+          <p className="users-section__meta">{grouped.admins.length} учётных записей</p>
+          {renderTable(grouped.admins, { showMunicipality: true })}
+        </section>
+      )}
+
+      {grouped.blocks.map((block) => (
+        <section key={block.key} className="users-section">
+          <h2 className="users-section__title">{block.title}</h2>
+          <p className="users-section__meta">
+            {block.users.length}{' '}
+            {block.users.length === 1
+              ? 'пользователь'
+              : block.users.length > 1 && block.users.length < 5
+                ? 'пользователя'
+                : 'пользователей'}
+          </p>
+          {renderTable(block.users, { showMunicipality: false })}
+        </section>
+      ))}
+
+      {!isAdmin && !grouped.blocks.length && (
+        <div className="empty">Пока нет пользователей в вашем округе</div>
+      )}
     </div>
   );
 }
