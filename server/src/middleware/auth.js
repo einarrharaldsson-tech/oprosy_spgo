@@ -29,8 +29,11 @@ export async function authRequired(req, res, next) {
        WHERE u.id = :id`,
       { id: payload.id }
     );
-    if (!users.length || !users[0].is_active) {
-      return res.status(401).json({ error: 'Пользователь не найден или отключён' });
+    if (!users.length) {
+      return res.status(401).json({ error: 'Пользователь не найден' });
+    }
+    if (!users[0].is_active) {
+      return res.status(403).json({ error: 'Учетная запись заблокирована' });
     }
     req.user = users[0];
     next();

@@ -24,7 +24,7 @@ router.post('/login', async (req, res) => {
       { login: String(login).trim() }
     );
 
-    if (!users.length || !users[0].is_active) {
+    if (!users.length) {
       return res.status(401).json({ error: 'Неверный логин или пароль' });
     }
 
@@ -32,6 +32,10 @@ router.post('/login', async (req, res) => {
     const ok = await verifyPassword(String(password), user.password_hash);
     if (!ok) {
       return res.status(401).json({ error: 'Неверный логин или пароль' });
+    }
+
+    if (!user.is_active) {
+      return res.status(403).json({ error: 'Учетная запись заблокирована' });
     }
 
     const token = signToken(user);

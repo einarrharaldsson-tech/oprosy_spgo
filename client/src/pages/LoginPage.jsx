@@ -32,7 +32,8 @@ export default function LoginPage() {
       <ThemeToggle className="login-theme-toggle" />
       <form className="login-card stack" onSubmit={onSubmit}>
         <div>
-          <Brand />
+          {/* No municipality on the login screen — only after successful auth. */}
+          <Brand municipalityName="" />
           <h1>Вход в систему</h1>
           <p className="hint">Авторизуйтесь, чтобы проводить опросы или работать с конструктором.</p>
         </div>

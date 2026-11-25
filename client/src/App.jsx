@@ -49,8 +49,10 @@ export default function App() {
           </Route>
           <Route element={<RequireAuth roles={['admin']} />}>
             <Route path="admin/municipalities" element={<AdminMunicipalitiesPage />} />
-            <Route path="admin/users" element={<AdminUsersPage />} />
             <Route path="admin/import" element={<ImportSurveyPage />} />
+          </Route>
+          <Route element={<RequireAuth roles={['admin', 'editor']} />}>
+            <Route path="admin/users" element={<AdminUsersPage />} />
           </Route>
           <Route element={<RequireAuth roles={['admin', 'editor']} />}>
             <Route path="admin/constructor" element={<ConstructorListPage />} />
