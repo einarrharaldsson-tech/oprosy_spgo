@@ -102,23 +102,16 @@ export default function SurveyAnalytics({ survey, items, onError }) {
     try {
       let mapImage;
       let mapFragments = [];
-      const mapNode = reportRef.current?.querySelector('.leaflet-container');
-      if (mapNode) {
-        await new Promise((resolve) => window.setTimeout(resolve, 400));
-        const { default: html2canvas } = await import('html2canvas');
-        const canvas = await html2canvas(mapNode, {
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: '#ffffff',
-          scale: 2,
-          logging: false,
-        });
-        mapImage = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
-      }
+      // Offscreen Leaflet captures wait for OSM tiles — more reliable than
+      // snapshotting the on-screen map (which often races tile load on Windows).
       try {
-        const { captureGeoMapFragments } = await import('../lib/captureGeoMapFragments');
+        const { captureOverviewMap, captureGeoMapFragments } = await import(
+          '../lib/captureGeoMapFragments'
+        );
+        mapImage = await captureOverviewMap(items);
         mapFragments = await captureGeoMapFragments(items);
       } catch {
+        mapImage = undefined;
         mapFragments = [];
       }
       const { downloadAnalyticsHtml, analyticsHtmlFilename, isProblematikaPptxSurvey } =

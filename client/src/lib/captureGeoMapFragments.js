@@ -19,20 +19,67 @@ function sleep(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-function waitForTileLayer(layer, timeoutMs = 4500) {
+/**
+ * Wait until OSM tiles have finished loading (or timeout).
+ * Tracks tileloadstart/tileload/tileerror so we don't snapshot a half-empty map.
+ */
+function waitForTileLayer(layer, timeoutMs = 8000) {
   return new Promise((resolve) => {
-    let done = false;
+    let pending = 0;
+    let settled = false;
+    let sawActivity = false;
+    let idleTimer = null;
+
     const finish = () => {
-      if (done) return;
-      done = true;
+      if (settled) return;
+      settled = true;
+      clearTimeout(hardStop);
+      if (idleTimer) clearTimeout(idleTimer);
+      layer.off('loading', onLoading);
       layer.off('load', onLoad);
+      layer.off('tileloadstart', onTileStart);
+      layer.off('tileload', onTileDone);
+      layer.off('tileerror', onTileDone);
       resolve();
     };
-    const onLoad = () => {
-      window.setTimeout(finish, 180);
+
+    const scheduleIdle = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      // Settle shortly after the last tile event / layer load.
+      idleTimer = setTimeout(() => {
+        if (pending <= 0) finish();
+      }, 280);
     };
+
+    const onLoading = () => {
+      sawActivity = true;
+    };
+    const onLoad = () => {
+      sawActivity = true;
+      pending = 0;
+      scheduleIdle();
+    };
+    const onTileStart = () => {
+      sawActivity = true;
+      pending += 1;
+    };
+    const onTileDone = () => {
+      pending = Math.max(0, pending - 1);
+      if (pending === 0) scheduleIdle();
+    };
+
+    layer.on('loading', onLoading);
     layer.on('load', onLoad);
-    window.setTimeout(finish, timeoutMs);
+    layer.on('tileloadstart', onTileStart);
+    layer.on('tileload', onTileDone);
+    layer.on('tileerror', onTileDone);
+
+    const hardStop = setTimeout(finish, timeoutMs);
+    // If tiles were already cached, 'load' may have fired before we subscribed —
+    // give a short fallback wait.
+    setTimeout(() => {
+      if (!sawActivity && pending === 0) scheduleIdle();
+    }, 400);
   });
 }
 
@@ -40,22 +87,39 @@ async function canvasToPngBlob(canvas) {
   return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
 }
 
+/** Poll until Leaflet tile <img> nodes have decoded (or timeout). */
+async function waitForTileImages(host, timeoutMs = 8000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const imgs = Array.from(host.querySelectorAll('.leaflet-tile-pane img'));
+    if (imgs.length > 0 && imgs.every((img) => img.complete && img.naturalWidth > 0)) {
+      await sleep(200);
+      return;
+    }
+    await sleep(120);
+  }
+}
+
 /**
  * Render an off-screen Leaflet map for a set of points and capture a PNG blob.
+ * Host stays in the viewport (opacity:0) — tiles often fail to load when the
+ * map is positioned far off-screen (common blank-map issue on Windows).
  */
-async function capturePointsMap(points, { width = 960, height = 540, pad = 0.4 } = {}) {
+export async function capturePointsMap(points, { width = 960, height = 540, pad = 0.4, maxZoom = 17 } = {}) {
   if (!points?.length) return null;
 
   const host = document.createElement('div');
   host.setAttribute('aria-hidden', 'true');
   host.style.cssText = [
     'position:fixed',
-    'left:-12000px',
+    'left:0',
     'top:0',
     `width:${width}px`,
     `height:${height}px`,
     'overflow:hidden',
     'background:#fff',
+    'opacity:0',
+    'pointer-events:none',
     'z-index:-1',
   ].join(';');
   document.body.appendChild(host);
@@ -71,11 +135,17 @@ async function capturePointsMap(points, { width = 960, height = 540, pad = 0.4 }
       boxZoom: false,
       keyboard: false,
       preferCanvas: true,
+      fadeAnimation: false,
+      zoomAnimation: false,
+      markerZoomAnimation: false,
     });
 
     const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       crossOrigin: true,
+      updateWhenIdle: false,
+      updateWhenZooming: false,
+      keepBuffer: 4,
     }).addTo(map);
 
     const group = L.featureGroup();
@@ -92,12 +162,16 @@ async function capturePointsMap(points, { width = 960, height = 540, pad = 0.4 }
 
     map.invalidateSize(true);
     if (points.length === 1) {
-      map.setView([points[0].lat, points[0].lng], 16);
+      map.setView([points[0].lat, points[0].lng], Math.min(16, maxZoom), { animate: false });
     } else {
-      map.fitBounds(group.getBounds().pad(pad), { animate: false, maxZoom: 17 });
+      map.fitBounds(group.getBounds().pad(pad), { animate: false, maxZoom });
     }
     map.invalidateSize(true);
-    await waitForTileLayer(tiles);
+
+    await sleep(120);
+    map.invalidateSize(true);
+    await waitForTileLayer(tiles, 10000);
+    await waitForTileImages(host, 10000);
     await sleep(350);
 
     const { default: html2canvas } = await import('html2canvas');
@@ -110,6 +184,14 @@ async function capturePointsMap(points, { width = 960, height = 540, pad = 0.4 }
       logging: false,
       width,
       height,
+      imageTimeout: 20000,
+      onclone: (_doc, cloned) => {
+        // Ensure tile images are visible in the clone (opacity/transitions).
+        cloned.querySelectorAll('.leaflet-tile').forEach((el) => {
+          el.style.opacity = '1';
+          el.style.visibility = 'visible';
+        });
+      },
     });
     return canvasToPngBlob(canvas);
   } finally {
@@ -120,6 +202,18 @@ async function capturePointsMap(points, { width = 960, height = 540, pad = 0.4 }
     }
     host.remove();
   }
+}
+
+/** Overview map snapshot for all geotags (same offscreen path as fragments). */
+export async function captureOverviewMap(items, options = {}) {
+  const points = collectGeoPoints(items);
+  if (!points.length) return null;
+  return capturePointsMap(points, {
+    width: options.width || 1100,
+    height: options.height || 620,
+    pad: options.pad ?? 0.25,
+    maxZoom: options.maxZoom || 15,
+  });
 }
 
 /**

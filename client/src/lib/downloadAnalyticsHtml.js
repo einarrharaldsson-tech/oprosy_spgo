@@ -256,40 +256,51 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
     color-adjust: exact !important;
   }
   .toolbar-print { display: none !important; }
-  html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
-  .deck { max-width: none; width: 100%; margin: 0; padding: 0; }
+  html, body {
+    background: #fff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    width: auto !important;
+  }
+  .deck { max-width: none; width: 297mm; margin: 0; padding: 0; }
+  /* One slide = one landscape page.
+     Use 209mm (not full 210mm) so subpixel/rounding on Safari/macOS does not
+     spill 1px past the page and invent a blank page between slides.
+     Avoid break-inside:avoid on the whole slide — same blank-page bug. */
   .slide {
+    box-sizing: border-box !important;
     box-shadow: none !important;
     border: 0 !important;
     border-radius: 0 !important;
     margin: 0 !important;
     padding: 8mm 10mm !important;
+    width: 297mm !important;
+    height: 209mm !important;
+    max-height: 209mm !important;
     min-height: 0 !important;
-    width: 297mm;
-    height: 210mm;
-    max-height: 210mm;
     overflow: hidden !important;
+    display: block !important;
+    position: relative !important;
     page-break-after: always;
     break-after: page;
-    page-break-inside: avoid;
-    break-inside: avoid;
+    page-break-inside: auto;
+    break-inside: auto;
   }
   .slide:last-child {
-    page-break-after: auto;
-    break-after: auto;
-  }
-  /* Keep desktop composition (2 columns) — never use narrow/mobile stacking in print. */
-  .slide {
-    display: flex;
-    flex-direction: column;
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
   .slide-scale {
+    box-sizing: border-box !important;
     width: 100% !important;
     max-width: none !important;
-    flex: 1 1 auto;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
+    display: block !important;
+    transform-origin: top left;
+  }
+  .title-slide {
+    display: block !important;
+    min-height: 0 !important;
   }
   .split-2 { grid-template-columns: 1fr 1fr !important; gap: 32px !important; }
   .pie-wrap {
@@ -305,28 +316,24 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
     gap: 8px 12px !important;
     font-size: 1rem;
   }
-  .title-slide { min-height: 0 !important; height: 210mm; }
   .title-hero { padding: 24px 8px; gap: 14px; }
   .title-hero img.gerb { width: 120px; }
   .title-hero h1 { font-size: 1.7rem; }
-  .slide-head { margin-bottom: 18px; padding-bottom: 12px; flex: 0 0 auto; }
+  .slide-head { margin-bottom: 18px; padding-bottom: 12px; }
   .slide-titles h2 { font-size: 1.28rem; }
   .ctx { font-size: 0.88rem; }
   /* Keep pies at full visual size — do not shrink vs on-screen HTML. */
   .pie { width: 280px !important; height: 280px !important; max-width: none !important; }
   .slide--pies .pie { width: 300px !important; height: 300px !important; }
+  .geo-grid img, .geo-frag img {
+    max-width: 100% !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
   .geo-grid img { max-height: 140mm; }
   .geo-fragments { gap: 12px 14px; }
   .geo-frag img { max-height: 68mm; }
-  .slide-body {
-    gap: 18px;
-    flex: 1 1 auto;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    min-height: 0;
-  }
-  .slide--pies .slide-body { justify-content: center; }
+  .slide-body { gap: 18px; }
   .chart-block h3 { margin-bottom: 12px; font-size: 1.05rem; }
   .bars { gap: 8px; }
   .bar-svg { height: 12px; }
@@ -344,14 +351,25 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
 
 function buildPrintFitScript() {
   // Fit each slide to one landscape A4 page.
-  // Short pie slides must NOT be over-shrunk: use page-width layout, enlarge pies,
-  // and scale down only when content actually overflows the printable area.
+  // After CSS transform:scale, reclaim layout space with negative margins so
+  // Safari/macOS does not invent blank pages between slides.
   return `<script>(function(){
   var PAGE_W = 297;
-  var PAGE_H = 210;
+  var PAGE_H = 209;
   var PAD_X = 20;
   var PAD_Y = 16;
   function mmToPx(mm){ return mm * 96 / 25.4; }
+  function waitImages(){
+    var imgs = Array.prototype.slice.call(document.images || []);
+    return Promise.all(imgs.map(function(img){
+      if (img.complete && img.naturalWidth) return Promise.resolve();
+      if (img.decode) return img.decode().catch(function(){});
+      return new Promise(function(res){
+        img.onload = img.onerror = function(){ res(); };
+        setTimeout(res, 2500);
+      });
+    }));
+  }
   function fitSlides(){
     var slides = document.querySelectorAll('.slide');
     var availW = mmToPx(PAGE_W) - mmToPx(PAD_X);
@@ -369,9 +387,11 @@ function buildPrintFitScript() {
       else slide.classList.remove('slide--pies');
 
       inner.style.transform = 'none';
+      inner.style.marginBottom = '0';
+      inner.style.marginRight = '0';
       inner.style.width = Math.floor(availW) + 'px';
       inner.style.maxWidth = 'none';
-      inner.style.height = '';
+      inner.style.height = 'auto';
       pies.forEach(function(p){
         var size = pies.length <= 2 ? 300 : 260;
         p.style.width = size + 'px';
@@ -384,10 +404,16 @@ function buildPrintFitScript() {
       if (rect.height > availH + 0.5) scale = availH / rect.height;
       if (rect.width > availW + 0.5) scale = Math.min(scale, availW / rect.width);
       if (!isFinite(scale) || scale <= 0) scale = 1;
-      // Never upscale; only shrink overflow. Short pie slides stay full size.
       if (scale > 1) scale = 1;
       inner.style.transformOrigin = 'top left';
-      inner.style.transform = scale < 0.999 ? ('scale(' + scale + ')') : 'none';
+      if (scale < 0.999) {
+        inner.style.transform = 'scale(' + scale + ')';
+        // Collapse unused layout space after transform (critical for macOS print).
+        inner.style.marginBottom = ((scale - 1) * rect.height) + 'px';
+        inner.style.marginRight = ((scale - 1) * rect.width) + 'px';
+      } else {
+        inner.style.transform = 'none';
+      }
     });
   }
   function clearFit(){
@@ -396,6 +422,8 @@ function buildPrintFitScript() {
       inner.style.width = '';
       inner.style.maxWidth = '';
       inner.style.height = '';
+      inner.style.marginBottom = '';
+      inner.style.marginRight = '';
       inner.querySelectorAll('.pie').forEach(function(p){
         p.style.width = '';
         p.style.height = '';
@@ -403,13 +431,19 @@ function buildPrintFitScript() {
     });
     document.querySelectorAll('.slide--pies').forEach(function(s){ s.classList.remove('slide--pies'); });
   }
-  window.addEventListener('beforeprint', fitSlides);
+  function preparePrint(){
+    return waitImages().then(function(){ fitSlides(); });
+  }
+  window.addEventListener('beforeprint', function(){ fitSlides(); });
   window.addEventListener('afterprint', clearFit);
   var mo = window.matchMedia && window.matchMedia('print');
   if (mo) {
     if (mo.addEventListener) mo.addEventListener('change', function(e){ e.matches ? fitSlides() : clearFit(); });
     else if (mo.addListener) mo.addListener(function(e){ e.matches ? fitSlides() : clearFit(); });
   }
+  window.__oprosyPreparePrint = function(){
+    return preparePrint().then(function(){ window.print(); });
+  };
 })();</script>`;
 }
 
@@ -569,8 +603,8 @@ export async function buildAnalyticsHtmlString({
     `<meta name="viewport" content="width=device-width, initial-scale=1"/>` +
     `<title>${escapeHtml(`${DISTRICT_CODE} - проблематика в ${quarterCode}`)}</title>` +
     `<style>${buildCss()}</style></head><body>` +
-    `<div class="toolbar-print"><button type="button" onclick="window.print()">Печать / PDF</button>` +
-    `<span class="note">Цифры совпадают с аналитикой · ${escapeHtml(String(total))} проведений · PDF: альбомная A4, поля «Нет» / минимальные</span></div>` +
+    `<div class="toolbar-print"><button type="button" onclick="(window.__oprosyPreparePrint||window.print)()">Печать / PDF</button>` +
+    `<span class="note">Цифры совпадают с аналитикой · ${escapeHtml(String(total))} проведений · PDF: альбомная A4, поля «Нет»</span></div>` +
     `<main class="deck">${slides.join('\n')}</main>` +
     buildPrintFitScript() +
     `</body></html>`
