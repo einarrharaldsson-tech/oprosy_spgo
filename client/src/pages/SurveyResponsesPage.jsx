@@ -4,16 +4,7 @@ import { api, downloadAuthenticated } from '../api';
 import ResponseAudio from '../components/ResponseAudio';
 import ResponseGeoMap from '../components/ResponseGeoMap';
 import SurveyAnalytics from '../components/SurveyAnalytics';
-import { formatOptionAnswer } from '../lib/options';
-
-function answerText(q, itemAnswers) {
-  const ans = itemAnswers.filter((a) => a.questionId === q.id);
-  if (q.answerType === 'text' || q.answerType === 'address') return ans[0]?.textValue || '—';
-  const texts = ans
-    .map((a) => formatOptionAnswer(a.optionText, a.textValue))
-    .filter(Boolean);
-  return texts.length ? texts.join(', ') : '—';
-}
+import { answerText } from '../lib/responseAnswers';
 
 export default function SurveyResponsesPage() {
   const { id } = useParams();

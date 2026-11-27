@@ -86,16 +86,46 @@ a {
 }
 
 .brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.brand__name {
   font-family: var(--display);
   font-weight: 700;
   font-size: clamp(1.15rem, 3.5vw, 1.35rem);
   letter-spacing: -0.02em;
   color: var(--brand);
-  line-height: 1.15;
 }
 
-.brand span {
-  color: var(--accent);
+.brand__municipality {
+  font-family: var(--font);
+  font-weight: 500;
+  font-size: 0.72rem;
+  letter-spacing: 0.01em;
+  color: var(--ink-soft);
+  line-height: 1.2;
+  max-width: 24rem;
+}
+
+.brand__tagline {
+  font-family: var(--font);
+  font-weight: 500;
+  font-size: 0.68rem;
+  letter-spacing: 0.01em;
+  color: var(--ink-soft);
+  line-height: 1.25;
+  max-width: 22rem;
+}
+
+.brand__credit {
+  font-size: 0.58rem;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--ink-soft) 78%, transparent);
 }
 
 .app-footer {
@@ -142,9 +172,22 @@ a {
 }
 
 .login-card .brand {
-  font-size: clamp(1.5rem, 5vw, 2rem);
-  display: block;
-  margin-bottom: 8px;
+  display: flex;
+  margin-bottom: 10px;
+  gap: 4px;
+}
+
+.login-card .brand__name {
+  font-size: clamp(1.6rem, 5.5vw, 2.1rem);
+}
+
+.login-card .brand__tagline {
+  font-size: 0.82rem;
+  max-width: none;
+}
+
+.login-card .brand__credit {
+  font-size: 0.68rem;
 }
 
 .topbar-meta {
@@ -281,8 +324,21 @@ a {
     padding-top: max(8px, env(safe-area-inset-top));
   }
 
-  .brand {
+  .brand__name {
     font-size: clamp(1rem, 3vw, 1.15rem);
+  }
+
+  .brand__municipality {
+    font-size: 0.62rem;
+    max-width: 16rem;
+  }
+
+  .brand__tagline {
+    font-size: 0.6rem;
+  }
+
+  .brand__credit {
+    font-size: 0.52rem;
   }
 
   .nav {
@@ -439,6 +495,50 @@ a {
 
 .btn-block {
   width: 100%;
+}
+
+.btn-sm {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 650;
+  gap: 4px;
+}
+
+.users-section {
+  margin-bottom: 18px;
+}
+
+.users-section__title {
+  margin: 0 0 10px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--brand);
+}
+
+.users-section__meta {
+  margin: 0 0 10px;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.users-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.table.table--users th,
+.table.table--users td {
+  padding: 8px 8px;
+}
+
+.table.table--users td:last-child {
+  white-space: nowrap;
+  width: 1%;
 }
 
 .field {
@@ -848,6 +948,65 @@ a {
   font: inherit;
 }
 
+.geo-map--conduct {
+  height: 220px;
+  border: 1px solid var(--line);
+  touch-action: manipulation;
+}
+
+.geo-map--analytics {
+  height: 300px;
+  border: 1px solid var(--line);
+}
+
+.conduct-geo-picker {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--brand) 6%, var(--mix-light));
+  border: 1px solid var(--line);
+}
+
+.conduct-geo-picker__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.conduct-geo-picker__toggle {
+  font-size: 0.9rem;
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.conduct-geo-picker__panel {
+  margin-top: 10px;
+}
+
+.conduct-geo-picker__hint {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+}
+
+.conduct-geo-picker__coords {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+}
+
+.conduct-geo-picker__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.conduct-geo-picker__actions .btn {
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: 0.9rem;
+}
+
 .analytics {
   margin: 4px 0 20px;
 }
@@ -857,11 +1016,72 @@ a {
   margin-bottom: 12px;
 }
 
+.analytics__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.analytics__chevron {
+  display: inline-block;
+  width: 1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
 .analytics__title {
   margin: 0;
   font-size: 1.05rem;
   font-weight: 700;
   color: var(--brand);
+}
+
+.analytics-sessions {
+  margin-top: 20px;
+}
+
+.analytics-sessions__title {
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--brand);
+}
+
+.analytics-sessions__list {
+  gap: 12px;
+}
+
+.analytics-session__head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 12px;
+  margin-bottom: 8px;
+}
+
+.analytics-session__geo {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+}
+
+.analytics-session__answers {
+  display: grid;
+  gap: 10px;
+}
+
+.analytics-session__q {
+  font-weight: 650;
+}
+
+.analytics-session__a {
+  margin-top: 2px;
 }
 
 .analytics-report {
@@ -957,12 +1177,39 @@ a {
 .analytics-other__label {
   font-weight: 650;
   font-size: 0.85rem;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
 
-.analytics-other p {
-  margin: 0 0 4px;
-  font-size: 0.85rem;
+.analytics-other__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px 14px;
+}
+
+.analytics-other__item {
+  margin: 0;
+  padding: 0 0 0 10px;
+  /* Solid color only: html2canvas cannot parse color-mix() during PDF capture. */
+  border-left: 2px solid var(--brand-mid);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 560px) {
+  .analytics-other__list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 900px) {
+  .analytics-other__list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (min-width: 768px) {

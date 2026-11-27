@@ -16,6 +16,7 @@ export default function Layout() {
   const { user, logout } = useAuth();
   const isAdmin = user.role === 'admin';
   const canConstruct = user.role === 'admin' || user.role === 'editor';
+  const canManageUsers = isAdmin || user.role === 'editor';
   const canCompleted = canConstruct;
   const [pendingCount, setPendingCount] = useState(0);
 
@@ -37,7 +38,9 @@ export default function Layout() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <Brand />
+        <Brand
+          municipalityName={user?.municipality?.nameFull || ''}
+        />
         <div className="topbar-meta">
           <ThemeToggle />
           <span>
@@ -62,7 +65,8 @@ export default function Layout() {
           <NavLink to="/admin/constructor">Конструктор</NavLink>
         )}
         {isAdmin && <NavLink to="/admin/import">Импорт опроса</NavLink>}
-        {isAdmin && <NavLink to="/admin/users">Пользователи</NavLink>}
+        {isAdmin && <NavLink to="/admin/municipalities">Округа</NavLink>}
+        {canManageUsers && <NavLink to="/admin/users">Пользователи</NavLink>}
         {canCompleted && <NavLink to="/completed">Завершённые</NavLink>}
         {isAdmin && <NavLink to="/history">История</NavLink>}
       </nav>

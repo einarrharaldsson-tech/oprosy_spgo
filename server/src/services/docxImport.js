@@ -6,9 +6,11 @@ import mammoth from 'mammoth';
 
 const QUESTION_RE = /^(\d+)\.\s+(.+)$/;
 const BLANK_LINE_RE = /^_+$/;
-const SKIP_HINT_RE = /переход\s+к\s+вопрос|окончание\s+интервью/i;
-const JUMP_TO_QUESTION_RE = /переход\s+к\s+вопрос(?:у)?\s*№?\s*(\d+)/i;
-const END_INTERVIEW_RE = /окончание\s+интервью/i;
+const SKIP_HINT_RE =
+  /переход\s+к\s+(?:вопрос|в\.)|окончание\s+(?:интервью|опроса)/i;
+const JUMP_TO_QUESTION_RE =
+  /переход\s+к\s+(?:вопрос(?:у)?\s*№?\s*|в\.\s*)(\d+)/i;
+const END_INTERVIEW_RE = /окончание\s+(?:интервью|опроса)/i;
 const OPEN_HINT_RE = /открыт(ый|ый\s+вопрос)|открытый\s+вопрос/i;
 const MULTI_HINT_RE = /любо(е|ое)\s+число\s+ответов|карточка/i;
 const SINGLE_HINT_RE = /один\s+ответ/i;
@@ -63,8 +65,14 @@ function extractParenHints(text) {
 
 /** True if numbered line looks like a real survey question, not an option like «1. Мужской». */
 export function looksLikeQuestion(text) {
-  const t = cleanLine(text);
+  // Underscore blanks from paper forms must not inflate length into a "question".
+  const t = cleanLine(text)
+    .replace(/_+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (!t) return false;
+  // Typical choice option, not a question stem.
+  if (/^другое\b/i.test(t)) return false;
   if (/\?/.test(t)) return true;
   if (TYPE_HINT_RE.test(t)) return true;
   if (/указывается\s+полевым/i.test(t)) return true;
@@ -102,6 +110,83 @@ function stripSkipLogic(line) {
   return line.slice(0, cut).trim();
 }
 
+/**
+ * Split PDF/Word lines that pack several numbered options into one row
+ * (e.g. «1. Высшее 3. Среднее специальное 5. Неполное…»).
+ */
+export function expandPackedOptionLine(line) {
+  const raw = String(line || '').trim();
+  if (!raw) return [];
+  const starts = [];
+  const re = /(?:^|\s)(\d+)\.\s+/g;
+  let m;
+  while ((m = re.exec(raw))) {
+    starts.push({ index: m.index + (m[0].startsWith(' ') ? 1 : 0), num: m[1] });
+  }
+  if (starts.length <= 1) return [raw];
+  const parts = [];
+  for (let i = 0; i < starts.length; i++) {
+    const from = starts[i].index;
+    const to = i + 1 < starts.length ? starts[i + 1].index : raw.length;
+    const chunk = raw.slice(from, to).trim();
+    if (chunk) parts.push(chunk);
+  }
+  return parts.length ? parts : [raw];
+}
+
+function isPageNumberLine(line) {
+  return /^\d{1,2}$/.test(line);
+}
+
+function isBoilerplateLine(line) {
+  return (
+    /^благодарю\s+за\s+терпение/i.test(line) ||
+    /^и\s+завершающ/i.test(line) ||
+    /^спасибо\s+за\s+участие/i.test(line)
+  );
+}
+
+/** Normalize extracted questionnaire text into clean paragraph lines for parseSurveyParagraphs. */
+export function normalizeQuestionnaireText(text) {
+  const joined = String(text || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\u00a0/g, ' ')
+    // Re-join jumps split across lines: «окончание\nинтервью»
+    .replace(/окончание\s*\n\s*(интервью|опроса)/gi, 'окончание $1')
+    .replace(/переход\s*\n\s*к\s+/gi, 'переход к ');
+
+  const rough = joined
+    .split(/\n+/)
+    .map((l) => cleanLine(l))
+    .filter((l) => l.length > 0)
+    .filter((l) => !isPageNumberLine(l) && !isBoilerplateLine(l));
+
+  // Merge soft-wrapped continuations (PDF often breaks mid-question / mid-option).
+  const merged = [];
+  for (const line of rough) {
+    const prev = merged[merged.length - 1];
+    const startsNumbered = QUESTION_RE.test(line);
+    if (prev && !startsNumbered) {
+      merged[merged.length - 1] = `${prev} ${line}`.replace(/\s+/g, ' ').trim();
+      continue;
+    }
+    merged.push(line);
+  }
+
+  const out = [];
+  let lastQNum = null;
+  for (const line of merged) {
+    if (isQuestionStart(line, lastQNum)) {
+      lastQNum = Number(line.match(QUESTION_RE)[1]);
+      out.push(line);
+      continue;
+    }
+    const expanded = expandPackedOptionLine(line);
+    out.push(...expanded);
+  }
+  return out;
+}
+
 function extractJumpMeta(line) {
   const raw = String(line || '');
   if (END_INTERVIEW_RE.test(raw)) {
@@ -125,23 +210,42 @@ function classifyQuestion(questionText, bodyLines) {
   const hasBlank = bodyLines.some(isBlankUnderline);
   const warnings = [];
 
-  const options = [];
+  const staged = [];
   for (const raw of bodyLines) {
-    if (isBlankUnderline(raw)) continue;
+    const numMatch = String(raw).match(/^(\d+)\.\s+/);
     const jumpMeta = extractJumpMeta(raw);
-    let line = cleanLine(stripOptionNumber(raw));
+    let line = cleanLine(stripOptionNumber(raw))
+      .replace(/_+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    // Paper-form blank write-in ("1. ______") → free-text "Другое".
+    if (!line && (isBlankUnderline(raw) || isBlankUnderline(stripOptionNumber(raw)))) {
+      line = 'Другое (укажите)';
+    }
     if (!line) continue;
-    if (SKIP_HINT_RE.test(line)) {
+    if (SKIP_HINT_RE.test(line) || SKIP_HINT_RE.test(raw)) {
       warnings.push(`Обнаружен переход в варианте ответа: «${line.slice(0, 80)}»`);
       line = stripSkipLogic(line);
       if (!line) continue;
     }
-    options.push({
+    staged.push({
+      num: numMatch ? Number(numMatch[1]) : null,
       text: line,
       jumpAction: jumpMeta.jumpAction,
       jumpToSourceNumber: jumpMeta.jumpToSourceNumber,
     });
   }
+
+  // PDF two-column layouts expand left-to-right; restore numeric order when possible.
+  if (staged.length > 1 && staged.every((o) => Number.isInteger(o.num))) {
+    staged.sort((a, b) => a.num - b.num);
+  }
+
+  const options = staged.map(({ text, jumpAction, jumpToSourceNumber }) => ({
+    text,
+    jumpAction,
+    jumpToSourceNumber,
+  }));
 
   // Dedupe consecutive identical options (Word tab artifacts)
   const deduped = [];

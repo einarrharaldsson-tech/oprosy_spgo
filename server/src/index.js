@@ -6,6 +6,7 @@ import { config } from './config.js';
 import { ensureAudioRoot } from './services/audioStorage.js';
 import authRoutes from './routes/auth.js';
 import usersRoutes from './routes/users.js';
+import municipalitiesRoutes from './routes/municipalities.js';
 import surveysRoutes from './routes/surveys.js';
 import dadataRoutes from './routes/dadata.js';
 
@@ -29,6 +30,7 @@ apiRouter.get('/health', (_req, res) => {
 });
 apiRouter.use('/auth', authRoutes);
 apiRouter.use('/users', usersRoutes);
+apiRouter.use('/municipalities', municipalitiesRoutes);
 apiRouter.use('/surveys', surveysRoutes);
 apiRouter.use('/dadata', dadataRoutes);
 

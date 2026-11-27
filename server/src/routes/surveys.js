@@ -13,12 +13,19 @@ import {
 import { parseDocxSurvey } from '../services/docxImport.js';
 import {
   loadSurveyStructure,
+  userCanAccessSurveyRecord,
   userCanConduct,
   userCanEditSurvey,
   userCanViewSurveyResults,
 } from '../services/surveys.js';
+import {
+  resolveSurveyMunicipalityId,
+  surveyMunicipalityClause,
+  userBelongsToMunicipality,
+} from '../services/municipalities.js';
 import { csvWithBom, safeFilename, toCsv } from '../services/csv.js';
 import {
+  relaxRequiredForSkippedQuestions,
   validateJumpConfiguration,
 } from '../services/jumpLogic.js';
 import { formatOptionAnswer, isOtherOptionText } from '../services/optionHelpers.js';
@@ -108,14 +115,21 @@ async function insertQuestionsAndOptions(conn, { surveyId, questions }) {
   }
 }
 
-async function insertSurveyWithQuestions(conn, { title, description, createdBy, questions }) {
+async function insertSurveyWithQuestions(conn, {
+  title,
+  description,
+  createdBy,
+  municipalityId,
+  questions,
+}) {
   const [created] = await conn.execute(
-    `INSERT INTO surveys (title, description, status, created_by)
-     VALUES (:title, :description, 'draft', :createdBy)`,
+    `INSERT INTO surveys (title, description, status, created_by, municipality_id)
+     VALUES (:title, :description, 'draft', :createdBy, :municipalityId)`,
     {
       title: String(title).trim(),
       description: description ? String(description).trim() : null,
       createdBy,
+      municipalityId,
     }
   );
   const surveyId = created.insertId;
@@ -125,14 +139,35 @@ async function insertSurveyWithQuestions(conn, { title, description, createdBy, 
 }
 
 /** Users list for access assignment (managers) — before /:id */
-router.get('/meta/assignable-users', requireRoles('admin', 'editor'), async (_req, res) => {
+router.get('/meta/assignable-users', requireRoles('admin', 'editor'), async (req, res) => {
   try {
-    const users = await query(
-      `SELECT id, login, full_name, role
-       FROM users
-       WHERE is_active = 1 AND role = 'user'
-       ORDER BY full_name, login`
-    );
+    const requestedMuni = req.query.municipalityId
+      ? Number(req.query.municipalityId)
+      : null;
+    let municipalityId = null;
+    if (req.user.role === 'editor') {
+      municipalityId = req.user.municipality_id ? Number(req.user.municipality_id) : null;
+      if (!municipalityId) {
+        return res.status(403).json({ error: 'Учётная запись не привязана к округу' });
+      }
+    } else if (requestedMuni) {
+      municipalityId = requestedMuni;
+    }
+
+    const users = municipalityId
+      ? await query(
+          `SELECT id, login, full_name, role
+           FROM users
+           WHERE is_active = 1 AND role = 'user' AND municipality_id = :municipalityId
+           ORDER BY full_name, login`,
+          { municipalityId }
+        )
+      : await query(
+          `SELECT id, login, full_name, role
+           FROM users
+           WHERE is_active = 1 AND role = 'user'
+           ORDER BY full_name, login`
+        );
     res.json(
       users.map((u) => ({
         id: u.id,
@@ -179,16 +214,22 @@ router.post('/import/commit', requireRoles('admin'), async (req, res) => {
     if (!title || !String(title).trim()) {
       return res.status(400).json({ error: 'Укажите название опроса' });
     }
+    relaxRequiredForSkippedQuestions(questions);
     const errMsg = validateImportQuestions(questions);
     if (errMsg) {
       return res.status(400).json({ error: errMsg });
     }
 
+    const municipalityId = await resolveSurveyMunicipalityId(
+      req.user,
+      req.body?.municipalityId
+    );
     const surveyId = await withTransaction(async (conn) =>
       insertSurveyWithQuestions(conn, {
         title,
         description,
         createdBy: req.user.id,
+        municipalityId,
         questions,
       })
     );
@@ -208,16 +249,20 @@ router.get('/', async (req, res) => {
     const completed = req.query.completed === '1' || req.query.completed === 'true';
     const { user } = req;
 
+    const scope = surveyMunicipalityClause(user, 's');
+
     if (archived) {
       if (!isAdmin(user)) {
         return res.status(403).json({ error: 'История доступна только администраторам' });
       }
       const rows = await query(
         `SELECT s.id, s.title, s.description, s.status, s.created_at, s.archived_at, s.completed_at,
+                s.municipality_id, m.name_short AS municipality_name_short, m.name_full AS municipality_name_full,
                 u.full_name AS creator_name,
                 (SELECT COUNT(*) FROM responses r WHERE r.survey_id = s.id) AS response_count
          FROM surveys s
          JOIN users u ON u.id = s.created_by
+         LEFT JOIN municipalities m ON m.id = s.municipality_id
          WHERE s.status = 'archived'
          ORDER BY s.archived_at DESC, s.id DESC`
       );
@@ -230,12 +275,15 @@ router.get('/', async (req, res) => {
       }
       const rows = await query(
         `SELECT s.id, s.title, s.description, s.status, s.created_at, s.archived_at, s.completed_at,
+                s.municipality_id, m.name_short AS municipality_name_short, m.name_full AS municipality_name_full,
                 u.full_name AS creator_name,
                 (SELECT COUNT(*) FROM responses r WHERE r.survey_id = s.id) AS response_count
          FROM surveys s
          JOIN users u ON u.id = s.created_by
-         WHERE s.status = 'completed'
-         ORDER BY s.completed_at DESC, s.id DESC`
+         LEFT JOIN municipalities m ON m.id = s.municipality_id
+         WHERE s.status = 'completed'${scope.sql}
+         ORDER BY s.completed_at DESC, s.id DESC`,
+        scope.params
       );
       return res.json(rows.map(mapListItem));
     }
@@ -244,24 +292,29 @@ router.get('/', async (req, res) => {
     if (user.role === 'admin' || user.role === 'editor') {
       rows = await query(
         `SELECT s.id, s.title, s.description, s.status, s.created_at, s.archived_at, s.completed_at,
+                s.municipality_id, m.name_short AS municipality_name_short, m.name_full AS municipality_name_full,
                 u.full_name AS creator_name,
                 (SELECT COUNT(*) FROM responses r WHERE r.survey_id = s.id) AS response_count
          FROM surveys s
          JOIN users u ON u.id = s.created_by
-         WHERE s.status IN ('draft', 'active')
-         ORDER BY FIELD(s.status, 'active', 'draft'), s.updated_at DESC`
+         LEFT JOIN municipalities m ON m.id = s.municipality_id
+         WHERE s.status IN ('draft', 'active')${scope.sql}
+         ORDER BY FIELD(s.status, 'active', 'draft'), s.updated_at DESC`,
+        scope.params
       );
     } else {
       rows = await query(
         `SELECT s.id, s.title, s.description, s.status, s.created_at, s.archived_at, s.completed_at,
+                s.municipality_id, m.name_short AS municipality_name_short, m.name_full AS municipality_name_full,
                 u.full_name AS creator_name,
                 (SELECT COUNT(*) FROM responses r WHERE r.survey_id = s.id) AS response_count
          FROM surveys s
          JOIN users u ON u.id = s.created_by
+         LEFT JOIN municipalities m ON m.id = s.municipality_id
          JOIN survey_access sa ON sa.survey_id = s.id AND sa.user_id = :userId
-         WHERE s.status = 'active'
+         WHERE s.status = 'active'${scope.sql}
          ORDER BY s.title`,
-        { userId: user.id }
+        { userId: user.id, ...scope.params }
       );
     }
 
@@ -283,6 +336,9 @@ function mapListItem(row) {
     completedAt: row.completed_at,
     creatorName: row.creator_name,
     responseCount: Number(row.response_count) || 0,
+    municipalityId: row.municipality_id || null,
+    municipalityNameShort: row.municipality_name_short || null,
+    municipalityNameFull: row.municipality_name_full || null,
   };
 }
 
@@ -294,13 +350,8 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Опрос не найден' });
     }
 
-    const { user } = req;
-    if (user.role === 'user') {
-      if (survey.status !== 'active' || !survey.accessUserIds.includes(user.id)) {
-        return res.status(403).json({ error: 'Нет доступа к опросу' });
-      }
-    } else if (user.role === 'editor' && survey.status === 'archived') {
-      return res.status(403).json({ error: 'Архивные опросы доступны только администраторам' });
+    if (!userCanAccessSurveyRecord(req.user, survey)) {
+      return res.status(403).json({ error: 'Нет доступа к опросу' });
     }
 
     res.json(survey);
@@ -313,18 +364,20 @@ router.get('/:id', async (req, res) => {
 /** Create survey (admin, editor) */
 router.post('/', requireRoles('admin', 'editor'), async (req, res) => {
   try {
-    const { title, description } = req.body || {};
+    const { title, description, municipalityId: requestedMuni } = req.body || {};
     if (!title || !String(title).trim()) {
       return res.status(400).json({ error: 'Укажите название опроса' });
     }
 
+    const municipalityId = await resolveSurveyMunicipalityId(req.user, requestedMuni);
     const result = await query(
-      `INSERT INTO surveys (title, description, status, created_by)
-       VALUES (:title, :description, 'draft', :createdBy)`,
+      `INSERT INTO surveys (title, description, status, created_by, municipality_id)
+       VALUES (:title, :description, 'draft', :createdBy, :municipalityId)`,
       {
         title: String(title).trim(),
         description: description ? String(description).trim() : null,
         createdBy: req.user.id,
+        municipalityId,
       }
     );
 
@@ -332,6 +385,7 @@ router.post('/', requireRoles('admin', 'editor'), async (req, res) => {
     res.status(201).json(survey);
   } catch (err) {
     console.error(err);
+    if (err.status) return res.status(err.status).json({ error: err.message });
     res.status(500).json({ error: 'Не удалось создать опрос' });
   }
 });
@@ -344,22 +398,28 @@ router.post('/:id/copy', requireRoles('admin', 'editor'), async (req, res) => {
     if (!source) {
       return res.status(404).json({ error: 'Опрос не найден' });
     }
-    if (req.user.role === 'editor' && source.status === 'archived') {
-      return res.status(403).json({ error: 'Архивные опросы доступны только администраторам' });
+    if (!userCanAccessSurveyRecord(req.user, source)) {
+      return res.status(403).json({ error: 'Нет доступа к опросу' });
     }
+
+    const municipalityId = await resolveSurveyMunicipalityId(
+      req.user,
+      source.municipalityId
+    );
 
     const baseTitle = String(source.title || '').trim() || 'Опрос';
     const copyTitle = `${baseTitle} (копия)`.slice(0, 255);
 
     const newId = await withTransaction(async (conn) => {
       const [created] = await conn.execute(
-        `INSERT INTO surveys (title, description, conduct_mode, status, created_by)
-         VALUES (:title, :description, :conductMode, 'draft', :createdBy)`,
+        `INSERT INTO surveys (title, description, conduct_mode, status, created_by, municipality_id)
+         VALUES (:title, :description, :conductMode, 'draft', :createdBy, :municipalityId)`,
         {
           title: copyTitle,
           description: source.description || null,
           conductMode: source.conductMode === 'step' ? 'step' : 'scroll',
           createdBy: req.user.id,
+          municipalityId,
         }
       );
       const surveyId = created.insertId;
@@ -458,6 +518,19 @@ router.put('/:id', requireRoles('admin', 'editor'), async (req, res) => {
     );
     const hasResponses = Number(respCountRows.cnt) > 0;
 
+    const uniqueIds = [...new Set((accessUserIds || []).map(Number).filter(Boolean))];
+    const surveyMuniId = access.survey.municipality_id;
+    if (surveyMuniId && uniqueIds.length) {
+      for (const userId of uniqueIds) {
+        const ok = await userBelongsToMunicipality(userId, surveyMuniId);
+        if (!ok) {
+          return res.status(400).json({
+            error: 'Назначать доступ можно только пользователям того же округа, что и опрос',
+          });
+        }
+      }
+    }
+
     await withTransaction(async (conn) => {
       const nextStatus = status || access.survey.status;
       const prevStatus = access.survey.status;
@@ -518,7 +591,6 @@ router.put('/:id', requireRoles('admin', 'editor'), async (req, res) => {
       }
 
       await conn.execute('DELETE FROM survey_access WHERE survey_id = :id', { id });
-      const uniqueIds = [...new Set((accessUserIds || []).map(Number).filter(Boolean))];
       for (const userId of uniqueIds) {
         await conn.execute(
           `INSERT INTO survey_access (survey_id, user_id) VALUES (:surveyId, :userId)`,

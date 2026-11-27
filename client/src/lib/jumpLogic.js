@@ -2,6 +2,22 @@ export function normalizeJumpAction(action) {
   return ['none', 'jump', 'end'].includes(action) ? action : 'none';
 }
 
+/** Clear required on questions that a forward jump would skip. */
+export function relaxRequiredForSkippedQuestions(questions) {
+  const list = questions || [];
+  for (let i = 0; i < list.length; i++) {
+    for (const opt of list[i].options || []) {
+      if (normalizeJumpAction(opt.jumpAction) !== 'jump') continue;
+      const targetIndex = Number(opt.jumpToQuestionIndex);
+      if (!Number.isInteger(targetIndex) || targetIndex <= i) continue;
+      for (let j = i + 1; j < targetIndex && j < list.length; j++) {
+        list[j].isRequired = false;
+      }
+    }
+  }
+  return list;
+}
+
 export function validateJumpConfiguration(questions) {
   const list = (questions || []).map((q, index) => ({ ...q, index }));
 
