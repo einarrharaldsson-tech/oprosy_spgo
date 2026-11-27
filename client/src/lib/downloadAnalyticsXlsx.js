@@ -201,19 +201,20 @@ function writeQuestionBlock(ws, startRow, questionText, district, rows, totalRes
   ws.getCell(r, 2).value = totalRespondents;
   r += 1;
 
+  // Answer rows: % of sessions (same as analytics charts). Headcount stays above.
   const firstData = r;
   for (const row of rows) {
     styleOption(ws.getCell(r, 1));
     ws.getCell(r, 1).value = row.label;
-    styleCount(ws.getCell(r, 2));
-    ws.getCell(r, 2).value = row.count;
+    stylePercent(ws.getCell(r, 2));
+    ws.getCell(r, 2).value = roundPercent(row.count, totalRespondents);
     r += 1;
   }
   const lastData = r - 1;
 
   styleTotal(ws.getCell(r, 1));
   ws.getCell(r, 1).value = 'Всего';
-  styleCount(ws.getCell(r, 2), true);
+  stylePercent(ws.getCell(r, 2), true);
   if (lastData >= firstData) {
     ws.getCell(r, 2).value = { formula: `SUM(B${firstData}:B${lastData})` };
   } else {

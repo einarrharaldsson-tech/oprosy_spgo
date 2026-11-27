@@ -190,7 +190,7 @@ export default function SurveyAnalytics({ survey, items, onError }) {
               type="button"
               className="btn btn-ghost"
               style={{ minHeight: 36, padding: '0 12px' }}
-              data-xlsx-rev="4"
+              data-xlsx-rev="5"
               onClick={downloadXlsx}
               disabled={exportBusy || !canExport}
             >
