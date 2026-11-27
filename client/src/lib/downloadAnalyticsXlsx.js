@@ -143,16 +143,10 @@ function buildFrequencyRows(question, items) {
   return rows;
 }
 
-/** Header + value row under a title: headcount | municipality full name. */
+/** Value row under a title: headcount | municipality full name (no header labels). */
 function writeHeadcountMunicipalityRows(ws, startRow, total, districtFull) {
   const label = districtFull || DISTRICT_FULL;
   let r = startRow;
-
-  styleHeader(ws.getCell(r, 1));
-  ws.getCell(r, 1).value = 'Число опрошенных';
-  styleHeader(ws.getCell(r, 2));
-  ws.getCell(r, 2).value = 'Наименование муниципалитета';
-  r += 1;
 
   styleCount(ws.getCell(r, 1), true);
   ws.getCell(r, 1).value = total;
