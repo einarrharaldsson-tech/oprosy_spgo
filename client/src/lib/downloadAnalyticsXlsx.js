@@ -61,6 +61,44 @@ function roundPercent(count, total) {
   return Math.round((count / total) * 1000) / 10;
 }
 
+/**
+ * Round counts to one-decimal percents that always sum to exactly 100.0
+ * (largest-remainder / Hare–Niemeyer). Avoids 99.6% / 100.4% from independent rounding.
+ */
+function distributePercents(counts, total) {
+  const n = counts.length;
+  if (!n) return [];
+  if (!total) return counts.map(() => 0);
+
+  const exact = counts.map((c) => ((c || 0) / total) * 1000); // tenths of a percent
+  const floors = exact.map((x) => Math.floor(x + 1e-9));
+  let remain = Math.round(1000 - floors.reduce((s, x) => s + x, 0));
+
+  const order = exact
+    .map((x, i) => ({ i, frac: x - floors[i], count: counts[i] || 0 }))
+    // Prefer larger remainders; ties → larger count, then earlier row.
+    .sort((a, b) => b.frac - a.frac || b.count - a.count || a.i - b.i);
+
+  const tenths = floors.slice();
+  for (let k = 0; k < order.length && remain > 0; k += 1) {
+    tenths[order[k].i] += 1;
+    remain -= 1;
+  }
+  // If over (float noise), shave from largest non-zero.
+  while (remain < 0) {
+    let best = -1;
+    for (let i = 0; i < n; i += 1) {
+      if (tenths[i] <= 0) continue;
+      if (best < 0 || tenths[i] > tenths[best]) best = i;
+    }
+    if (best < 0) break;
+    tenths[best] -= 1;
+    remain += 1;
+  }
+
+  return tenths.map((t) => t / 10);
+}
+
 /** e.g. 4кв26 for November 2026 */
 export function quarterLabel(date = new Date()) {
   const q = Math.floor(date.getMonth() / 3) + 1;
@@ -197,12 +235,18 @@ function writeQuestionBlock(ws, startRow, questionText, districtFull, rows, tota
 
   r = writeHeadcountMunicipalityRows(ws, r, answeredCount, label);
 
+  const percents = distributePercents(
+    answerRows.map((row) => row.count || 0),
+    selectionTotal
+  );
+
   const firstData = r;
-  for (const row of answerRows) {
+  for (let i = 0; i < answerRows.length; i += 1) {
+    const row = answerRows[i];
     styleOption(ws.getCell(r, 1));
     ws.getCell(r, 1).value = row.label;
     stylePercent(ws.getCell(r, 2));
-    ws.getCell(r, 2).value = roundPercent(row.count, selectionTotal);
+    ws.getCell(r, 2).value = percents[i];
     r += 1;
   }
   const lastData = r - 1;
@@ -211,7 +255,8 @@ function writeQuestionBlock(ws, startRow, questionText, districtFull, rows, tota
   ws.getCell(r, 1).value = 'Всего';
   stylePercent(ws.getCell(r, 2), true);
   if (lastData >= firstData) {
-    ws.getCell(r, 2).value = { formula: `SUM(B${firstData}:B${lastData})` };
+    // Explicit 100 when there are answers — SUM of adjusted rows also equals 100.0.
+    ws.getCell(r, 2).value = selectionTotal > 0 ? 100 : 0;
   } else {
     ws.getCell(r, 2).value = 0;
   }
@@ -236,12 +281,17 @@ function writeQuestionBlock(ws, startRow, questionText, districtFull, rows, tota
     r += 1;
 
     // Identical free-text answers → one row; % among «другое» texts (=100%).
-    const otherTextTotal = otherTexts.filter((t) => String(t || '').trim()).length;
-    for (const group of aggregateOtherTexts(otherTexts)) {
+    const otherGroups = aggregateOtherTexts(otherTexts);
+    const otherTextTotal = otherGroups.reduce((sum, g) => sum + g.count, 0);
+    const otherPercents = distributePercents(
+      otherGroups.map((g) => g.count),
+      otherTextTotal
+    );
+    for (let i = 0; i < otherGroups.length; i += 1) {
       styleOption(ws.getCell(r, 1));
-      ws.getCell(r, 1).value = group.label;
+      ws.getCell(r, 1).value = otherGroups[i].label;
       stylePercent(ws.getCell(r, 2));
-      ws.getCell(r, 2).value = roundPercent(group.count, otherTextTotal);
+      ws.getCell(r, 2).value = otherPercents[i];
       r += 1;
     }
   }
