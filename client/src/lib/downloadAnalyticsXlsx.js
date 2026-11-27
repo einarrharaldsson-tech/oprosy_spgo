@@ -179,6 +179,15 @@ function writeMunicipalityBlock(ws, startRow, total, districtFull) {
 
 function writeQuestionBlock(ws, startRow, questionText, districtFull, rows, totalRespondents) {
   const label = districtFull || DISTRICT_FULL;
+  // Only people who answered this question; «Без ответа» is omitted from the block.
+  const unanswered = rows
+    .filter((row) => row.id === 'unanswered')
+    .reduce((sum, row) => sum + (row.count || 0), 0);
+  const answerRows = rows.filter((row) => row.id !== 'unanswered');
+  const answeredCount = Math.max(0, totalRespondents - unanswered);
+  // % base = all selected answers for this question (=100%).
+  const selectionTotal = answerRows.reduce((sum, row) => sum + (row.count || 0), 0);
+
   let r = startRow;
   ws.mergeCells(r, 1, r, 2);
   styleTitle(ws.getCell(r, 1));
@@ -186,15 +195,14 @@ function writeQuestionBlock(ws, startRow, questionText, districtFull, rows, tota
   applyBorder(ws.getCell(r, 2));
   r += 1;
 
-  r = writeHeadcountMunicipalityRows(ws, r, totalRespondents, label);
+  r = writeHeadcountMunicipalityRows(ws, r, answeredCount, label);
 
-  // Answer rows: % of sessions (same as analytics charts).
   const firstData = r;
-  for (const row of rows) {
+  for (const row of answerRows) {
     styleOption(ws.getCell(r, 1));
     ws.getCell(r, 1).value = row.label;
     stylePercent(ws.getCell(r, 2));
-    ws.getCell(r, 2).value = roundPercent(row.count, totalRespondents);
+    ws.getCell(r, 2).value = roundPercent(row.count, selectionTotal);
     r += 1;
   }
   const lastData = r - 1;
@@ -209,7 +217,7 @@ function writeQuestionBlock(ws, startRow, questionText, districtFull, rows, tota
   }
   r += 1;
 
-  const otherRows = rows.filter((row) => row.isOther || (row.otherTexts || []).length);
+  const otherRows = answerRows.filter((row) => row.isOther || (row.otherTexts || []).length);
   const otherCount = otherRows.reduce((sum, row) => sum + (row.count || 0), 0);
   const otherTexts = otherRows.flatMap((row) => row.otherTexts || []);
   if (otherCount > 0 || otherTexts.length) {
@@ -220,20 +228,20 @@ function writeQuestionBlock(ws, startRow, questionText, districtFull, rows, tota
     applyBorder(ws.getCell(r, 2));
     r += 1;
 
-    // Same % as analytics charts (share of sessions). Plain text so Excel shows it clearly.
     styleHeader(ws.getCell(r, 1));
     ws.getCell(r, 1).value = '% ответа другое';
     stylePercent(ws.getCell(r, 2), true);
-    const otherPercent = roundPercent(otherCount, totalRespondents);
+    const otherPercent = roundPercent(otherCount, selectionTotal || answeredCount);
     ws.getCell(r, 2).value = `${String(otherPercent).replace('.', ',')}%`;
     r += 1;
 
-    // Identical free-text answers → one row with % of all respondents.
+    // Identical free-text answers → one row; % among «другое» texts (=100%).
+    const otherTextTotal = otherTexts.filter((t) => String(t || '').trim()).length;
     for (const group of aggregateOtherTexts(otherTexts)) {
       styleOption(ws.getCell(r, 1));
       ws.getCell(r, 1).value = group.label;
       stylePercent(ws.getCell(r, 2));
-      ws.getCell(r, 2).value = roundPercent(group.count, totalRespondents);
+      ws.getCell(r, 2).value = roundPercent(group.count, otherTextTotal);
       r += 1;
     }
   }
