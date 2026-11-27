@@ -228,16 +228,36 @@ function writeQuestionBlock(ws, startRow, questionText, districtFull, rows, tota
     ws.getCell(r, 2).value = `${String(otherPercent).replace('.', ',')}%`;
     r += 1;
 
-    for (const text of otherTexts) {
+    // Identical free-text answers → one row with % of all respondents.
+    for (const group of aggregateOtherTexts(otherTexts)) {
       styleOption(ws.getCell(r, 1));
-      ws.getCell(r, 1).value = text;
-      styleCount(ws.getCell(r, 2));
-      ws.getCell(r, 2).value = '';
+      ws.getCell(r, 1).value = group.label;
+      stylePercent(ws.getCell(r, 2));
+      ws.getCell(r, 2).value = roundPercent(group.count, totalRespondents);
       r += 1;
     }
   }
 
   return r + 2;
+}
+
+/** Group identical «другое» texts (case/spacing-insensitive); keep first label. */
+function aggregateOtherTexts(texts) {
+  const groups = new Map();
+  for (const raw of texts || []) {
+    const label = String(raw || '').replace(/\s+/g, ' ').trim();
+    if (!label) continue;
+    const key = label.toLowerCase();
+    const existing = groups.get(key);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      groups.set(key, { label, count: 1 });
+    }
+  }
+  return [...groups.values()].sort(
+    (a, b) => b.count - a.count || a.label.localeCompare(b.label, 'ru')
+  );
 }
 
 /**
