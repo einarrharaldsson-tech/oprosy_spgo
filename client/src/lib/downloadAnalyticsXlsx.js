@@ -3,6 +3,7 @@ import { isOtherOptionText } from './options';
 import { isChoiceQuestion } from './surveyAnalytics';
 
 export const DISTRICT_CODE = 'СПГО';
+export const DISTRICT_FULL = 'Сергиево - Посадский городской округ';
 
 const thin = { style: 'thin', color: { argb: 'FF000000' } };
 const thinBorder = { top: thin, left: thin, bottom: thin, right: thin };
@@ -142,19 +143,20 @@ function buildFrequencyRows(question, items) {
   return rows;
 }
 
-function writeMunicipalityBlock(ws, startRow, district, total, districtFull) {
+function writeMunicipalityBlock(ws, startRow, total, districtFull) {
+  const label = districtFull || DISTRICT_FULL;
   let r = startRow;
   ws.mergeCells(r, 1, r, 2);
   styleTitle(ws.getCell(r, 1));
-  ws.getCell(r, 1).value = districtFull || district || DISTRICT_CODE;
+  ws.getCell(r, 1).value = label;
   applyBorder(ws.getCell(r, 2));
   r += 1;
 
-  // Column header = district name; next row is the respondent count.
+  // Cell above «Число опрошенных» = full municipality name (never short code).
   styleHeader(ws.getCell(r, 1));
   ws.getCell(r, 1).value = '';
   styleHeader(ws.getCell(r, 2));
-  ws.getCell(r, 2).value = district;
+  ws.getCell(r, 2).value = label;
   r += 1;
 
   styleHeader(ws.getCell(r, 1));
@@ -164,7 +166,7 @@ function writeMunicipalityBlock(ws, startRow, district, total, districtFull) {
   r += 1;
 
   styleOption(ws.getCell(r, 1));
-  ws.getCell(r, 1).value = district;
+  ws.getCell(r, 1).value = label;
   styleCount(ws.getCell(r, 2));
   ws.getCell(r, 2).value = total;
   const dataRow = r;
@@ -179,7 +181,8 @@ function writeMunicipalityBlock(ws, startRow, district, total, districtFull) {
   return r + 2; // blank gap like the template
 }
 
-function writeQuestionBlock(ws, startRow, questionText, district, rows, totalRespondents) {
+function writeQuestionBlock(ws, startRow, questionText, districtFull, rows, totalRespondents) {
+  const label = districtFull || DISTRICT_FULL;
   let r = startRow;
   ws.mergeCells(r, 1, r, 2);
   styleTitle(ws.getCell(r, 1));
@@ -187,11 +190,11 @@ function writeQuestionBlock(ws, startRow, questionText, district, rows, totalRes
   applyBorder(ws.getCell(r, 2));
   r += 1;
 
-  // District as column header.
+  // Cell above «Число опрошенных» = full municipality name (never short code).
   styleHeader(ws.getCell(r, 1));
   ws.getCell(r, 1).value = '';
   styleHeader(ws.getCell(r, 2));
-  ws.getCell(r, 2).value = district;
+  ws.getCell(r, 2).value = label;
   r += 1;
 
   // «Число опрошенных» must be the numeric headcount, not the district name.
@@ -284,7 +287,7 @@ export async function downloadAnalyticsXlsx({
     districtFull ||
     survey?.municipality?.nameFull ||
     survey?.municipalityNameFull ||
-    resolvedCode;
+    DISTRICT_FULL;
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Реплика';
@@ -295,12 +298,12 @@ export async function downloadAnalyticsXlsx({
   });
 
   ws.getColumn(1).width = 65;
-  ws.getColumn(2).width = 22;
+  ws.getColumn(2).width = 36;
   ws.getColumn(3).width = 13;
   ws.getColumn(4).width = 32;
 
   let row = 1;
-  row = writeMunicipalityBlock(ws, row, resolvedCode, total, resolvedFull);
+  row = writeMunicipalityBlock(ws, row, total, resolvedFull);
 
   for (const question of questions) {
     const rows = buildFrequencyRows(question, items);
@@ -308,7 +311,7 @@ export async function downloadAnalyticsXlsx({
       ws,
       row,
       String(question.text || '').trim() || 'Вопрос',
-      resolvedCode,
+      resolvedFull,
       rows,
       total
     );
