@@ -143,6 +143,26 @@ function buildFrequencyRows(question, items) {
   return rows;
 }
 
+/** Header + value row under a title: headcount | municipality full name. */
+function writeHeadcountMunicipalityRows(ws, startRow, total, districtFull) {
+  const label = districtFull || DISTRICT_FULL;
+  let r = startRow;
+
+  styleHeader(ws.getCell(r, 1));
+  ws.getCell(r, 1).value = 'Число опрошенных';
+  styleHeader(ws.getCell(r, 2));
+  ws.getCell(r, 2).value = 'Наименование муниципалитета';
+  r += 1;
+
+  styleCount(ws.getCell(r, 1), true);
+  ws.getCell(r, 1).value = total;
+  styleHeader(ws.getCell(r, 2));
+  ws.getCell(r, 2).value = label;
+  r += 1;
+
+  return r;
+}
+
 function writeMunicipalityBlock(ws, startRow, total, districtFull) {
   const label = districtFull || DISTRICT_FULL;
   let r = startRow;
@@ -152,30 +172,12 @@ function writeMunicipalityBlock(ws, startRow, total, districtFull) {
   applyBorder(ws.getCell(r, 2));
   r += 1;
 
-  // Cell above «Число опрошенных» = full municipality name (never short code).
-  styleHeader(ws.getCell(r, 1));
-  ws.getCell(r, 1).value = '';
-  styleHeader(ws.getCell(r, 2));
-  ws.getCell(r, 2).value = label;
-  r += 1;
-
-  styleHeader(ws.getCell(r, 1));
-  ws.getCell(r, 1).value = 'Число опрошенных';
-  styleCount(ws.getCell(r, 2), true);
-  ws.getCell(r, 2).value = total;
-  r += 1;
-
-  styleOption(ws.getCell(r, 1));
-  ws.getCell(r, 1).value = label;
-  styleCount(ws.getCell(r, 2));
-  ws.getCell(r, 2).value = total;
-  const dataRow = r;
-  r += 1;
+  r = writeHeadcountMunicipalityRows(ws, r, total, label);
 
   styleTotal(ws.getCell(r, 1));
   ws.getCell(r, 1).value = 'Всего';
   styleCount(ws.getCell(r, 2), true);
-  ws.getCell(r, 2).value = { formula: `B${dataRow}` };
+  ws.getCell(r, 2).value = total;
   r += 1;
 
   return r + 2; // blank gap like the template
@@ -190,21 +192,9 @@ function writeQuestionBlock(ws, startRow, questionText, districtFull, rows, tota
   applyBorder(ws.getCell(r, 2));
   r += 1;
 
-  // Cell above «Число опрошенных» = full municipality name (never short code).
-  styleHeader(ws.getCell(r, 1));
-  ws.getCell(r, 1).value = '';
-  styleHeader(ws.getCell(r, 2));
-  ws.getCell(r, 2).value = label;
-  r += 1;
+  r = writeHeadcountMunicipalityRows(ws, r, totalRespondents, label);
 
-  // «Число опрошенных» must be the numeric headcount, not the district name.
-  styleHeader(ws.getCell(r, 1));
-  ws.getCell(r, 1).value = 'Число опрошенных';
-  styleCount(ws.getCell(r, 2), true);
-  ws.getCell(r, 2).value = totalRespondents;
-  r += 1;
-
-  // Answer rows: % of sessions (same as analytics charts). Headcount stays above.
+  // Answer rows: % of sessions (same as analytics charts).
   const firstData = r;
   for (const row of rows) {
     styleOption(ws.getCell(r, 1));
