@@ -55,7 +55,7 @@ globalThis.Blob = class Blob {
   }
 };
 
-const { downloadAnalyticsXlsx, analyticsXlsxFilename, quarterLabel } = await import(
+const { downloadAnalyticsXlsx, analyticsXlsxFilename } = await import(
   pathToFileURL(tmp).href
 );
 
@@ -115,7 +115,7 @@ const items = [
   },
 ];
 
-const filename = analyticsXlsxFilename('СПГО', new Date('2026-11-23'));
+const filename = analyticsXlsxFilename('СПГО', survey.title);
 await downloadAnalyticsXlsx({ survey, items, district: 'СПГО', filename });
 const buf = Buffer.from(await globalThis.__lastBlob.arrayBuffer());
 fs.mkdirSync(path.dirname(OUT), { recursive: true });
@@ -130,7 +130,6 @@ console.log(
     {
       ok: true,
       filename,
-      quarter: quarterLabel(new Date('2026-11-23')),
       out: OUT,
       bytes: buf.length,
       a1: ws.getCell(1, 1).value,

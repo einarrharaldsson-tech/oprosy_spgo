@@ -75,27 +75,10 @@ function safeFilenamePart(value, fallback = 'опрос') {
   return (cleaned || fallback).slice(0, 80);
 }
 
-/**
- * Universal analytics workbook name: «СПГО - Название опроса (4кв26).xlsx».
- * For the classic problematika survey keep the familiar «проблематика в …» form.
- */
-export function analyticsXlsxFilename(
-  district = DISTRICT_CODE,
-  date = new Date(),
-  surveyTitle
-) {
-  const code = district || DISTRICT_CODE;
-  const quarter = quarterLabel(date);
-  const title = String(surveyTitle || '').trim();
-  const isProblematika =
-    !title ||
-    /^опросник по проблематике\s*[-—–−‐]\s*ноябрь\s*2026$/i.test(
-      title.replace(/\s+/g, ' ').trim()
-    );
-  if (isProblematika) {
-    return `${code} - проблематика в ${quarter}.xlsx`;
-  }
-  return `${code} - ${safeFilenamePart(title)} (${quarter}).xlsx`;
+/** Universal analytics workbook name: «Округ - Название опроса.xlsx». */
+export function analyticsXlsxFilename(district = DISTRICT_CODE, surveyTitle) {
+  const code = safeFilenamePart(district || DISTRICT_CODE, DISTRICT_CODE);
+  return `${code} - ${safeFilenamePart(surveyTitle)}.xlsx`;
 }
 
 /**
@@ -338,7 +321,7 @@ export async function downloadAnalyticsXlsx({
   const a = document.createElement('a');
   a.href = url;
   a.download =
-    filename || analyticsXlsxFilename(resolvedCode, new Date(), survey?.title);
+    filename || analyticsXlsxFilename(resolvedCode, survey?.title);
   document.body.appendChild(a);
   a.click();
   a.remove();
