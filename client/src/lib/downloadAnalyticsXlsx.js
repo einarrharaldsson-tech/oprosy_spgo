@@ -228,11 +228,11 @@ function writeQuestionBlock(ws, startRow, questionText, districtFull, rows, tota
     applyBorder(ws.getCell(r, 2));
     r += 1;
 
-    styleHeader(ws.getCell(r, 1));
-    ws.getCell(r, 1).value = '% ответа другое';
-    stylePercent(ws.getCell(r, 2), true);
-    const otherPercent = roundPercent(otherCount, selectionTotal || answeredCount);
-    ws.getCell(r, 2).value = `${String(otherPercent).replace('.', ',')}%`;
+    // Same layout as other blocks: value | municipality name (no «% ответа другое» label).
+    stylePercent(ws.getCell(r, 1), true);
+    ws.getCell(r, 1).value = roundPercent(otherCount, selectionTotal || answeredCount);
+    styleHeader(ws.getCell(r, 2));
+    ws.getCell(r, 2).value = label;
     r += 1;
 
     // Identical free-text answers → one row; % among «другое» texts (=100%).
